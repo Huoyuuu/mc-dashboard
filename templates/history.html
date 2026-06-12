@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ server.name }} · 历史数据{% endblock %}
 {% block content %}
+{% set rows = rows | default([]) %}
+{% set chart_rows = chart_rows | default(rows) %}
+{% set page = page | default(1) | int %}
+{% set page_size = page_size | default(60) | int %}
+{% set total = total | default(rows | length) | int %}
+{% set total_pages = total_pages | default(1) | int %}
+{% set start_index = start_index | default(1 if total else 0) | int %}
+{% set end_index = end_index | default(rows | length) | int %}
+{% set chart_start = chart_start | default('') %}
+{% set chart_end = chart_end | default('') %}
 <div class="flex items-center gap-3 mb-7">
   <a href="/server/{{ server.id }}" class="grid place-items-center w-9 h-9 rounded-xl bg-white border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-300 shadow-sm transition">
     <i data-lucide="arrow-left" class="w-4.5 h-4.5"></i>
@@ -110,7 +120,7 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
-  const rows = {{ chart_rows | tojson }};
+  const rows = {{ chart_rows | default(rows | default([])) | tojson }};
   new Chart(document.getElementById('chart'), {
     type: 'line',
     data: {
