@@ -9,8 +9,7 @@
 {% set total_pages = total_pages | default(1) | int %}
 {% set start_index = start_index | default(1 if total else 0) | int %}
 {% set end_index = end_index | default(rows | length) | int %}
-{% set chart_start = chart_start | default('') %}
-{% set chart_end = chart_end | default('') %}
+{% set chart_limit = chart_limit | default(100) | int %}
 <div class="flex items-center gap-3 mb-7">
   <a href="/server/{{ server.id }}" class="grid place-items-center w-9 h-9 rounded-xl bg-white border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-300 shadow-sm transition">
     <i data-lucide="arrow-left" class="w-4.5 h-4.5"></i>
@@ -25,23 +24,14 @@
   <div class="flex flex-wrap items-end gap-3 mb-3">
     <p class="text-xs font-medium text-stone-500 flex items-center gap-1.5 mr-auto"><i data-lucide="line-chart" class="w-3.5 h-3.5"></i> 在线人数趋势</p>
     <form method="get" class="flex flex-wrap items-end gap-2">
-      <div>
-        <label class="block text-xs text-stone-400 mb-1">开始</label>
-        <input type="datetime-local" name="chart_start" value="{{ chart_start }}"
-               class="rounded-xl border border-stone-200 bg-stone-50/50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
-      </div>
-      <div>
-        <label class="block text-xs text-stone-400 mb-1">结束</label>
-        <input type="datetime-local" name="chart_end" value="{{ chart_end }}"
-               class="rounded-xl border border-stone-200 bg-stone-50/50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
-      </div>
-      <button class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium shadow-sm hover:bg-stone-50 active:scale-[0.98] transition">
-        <i data-lucide="search" class="w-3.5 h-3.5"></i> 应用
-      </button>
-      <a href="/server/{{ server.id }}/history"
-         class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium shadow-sm hover:bg-stone-50 transition">
-        最近 24 小时
-      </a>
+      <input type="hidden" name="page" value="{{ page }}">
+      <select name="chart_limit" onchange="this.form.submit()"
+              class="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
+        <option value="50" {{ 'selected' if chart_limit == 50 else '' }}>最近 50 条</option>
+        <option value="100" {{ 'selected' if chart_limit == 100 else '' }}>最近 100 条</option>
+        <option value="200" {{ 'selected' if chart_limit == 200 else '' }}>最近 200 条</option>
+        <option value="500" {{ 'selected' if chart_limit == 500 else '' }}>最近 500 条</option>
+      </select>
     </form>
   </div>
   <canvas id="chart" height="80"></canvas>
@@ -100,13 +90,12 @@
 
 <div class="flex flex-wrap items-center gap-2 mt-4 text-sm">
   <span class="text-stone-400 mr-auto">显示第 {{ start_index }}-{{ end_index }} 条，每页 {{ page_size }} 条</span>
-  {% set chart_query = '&chart_start=' ~ chart_start ~ '&chart_end=' ~ chart_end %}
+  {% set chart_query = '&chart_limit=' ~ chart_limit %}
   {% if page > 1 %}
   <a href="?page={{ page - 1 }}{{ chart_query }}" class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 font-medium shadow-sm hover:bg-stone-50 transition"><i data-lucide="chevron-left" class="w-4 h-4"></i> 上一页</a>
   {% endif %}
   <form method="get" class="inline-flex items-center gap-2">
-    <input type="hidden" name="chart_start" value="{{ chart_start }}">
-    <input type="hidden" name="chart_end" value="{{ chart_end }}">
+    <input type="hidden" name="chart_limit" value="{{ chart_limit }}">
     <input type="number" name="page" min="1" max="{{ total_pages }}" value="{{ page }}"
            class="w-20 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
     <button class="rounded-xl bg-stone-900 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-stone-700 active:scale-[0.98] transition">跳转</button>
@@ -121,10 +110,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
   const rows = {{ chart_rows | default(rows | default([])) | tojson }};
+  const formatTick = (value) => value ? value.slice(5, 16) : '';
   new Chart(document.getElementById('chart'), {
     type: 'line',
     data: {
-      labels: rows.map(r => r.ts.slice(5, 16)),
+      labels: rows.map(r => formatTick(r.ts)),
       datasets: [{
         label: '在线人数',
         data: rows.map(r => r.online ? r.player_count : null),

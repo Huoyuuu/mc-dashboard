@@ -1,18 +1,29 @@
 """SQLite 数据层：服务器列表 + 状态快照 + 在线玩家样本"""
+import contextlib
+import json
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "mcstatus.db"
+DATA_DIR = Path(__file__).parent / "data"
+DB_PATH = DATA_DIR / "mcstatus.db"
+LEGACY_SERVERS = DATA_DIR / "servers.json"
+LEGACY_HISTORY = DATA_DIR / "history.json"
 
 
+@contextlib.contextmanager
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def init_db():
+    DATA_DIR.mkdir(exist_ok=True)
     with get_conn() as conn:
         conn.executescript(
             """
@@ -44,6 +55,62 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_sp_snapshot ON snapshot_players(snapshot_id);
             """
         )
+    migrate_legacy_json()
+
+
+def _read_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return default
+
+
+def migrate_legacy_json():
+    if not LEGACY_SERVERS.exists():
+        return
+    legacy_servers = _read_json(LEGACY_SERVERS, [])
+    legacy_history = _read_json(LEGACY_HISTORY, [])
+    if not legacy_servers:
+        return
+    with get_conn() as conn:
+        if conn.execute("SELECT COUNT(*) FROM servers").fetchone()[0]:
+            return
+        id_map = {}
+        for srv in legacy_servers:
+            address = srv.get("address", "").strip()
+            port = srv.get("port")
+            if port and ":" not in address:
+                address = f"{address}:{port}"
+            if not address:
+                continue
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO servers (name, address) VALUES (?, ?)",
+                (srv.get("name") or address, address),
+            )
+            server_id = cur.lastrowid or conn.execute(
+                "SELECT id FROM servers WHERE address = ?", (address,)
+            ).fetchone()["id"]
+            id_map[str(srv.get("id"))] = server_id
+        for item in legacy_history:
+            server_id = id_map.get(str(item.get("server_id")))
+            if not server_id:
+                continue
+            ts = (item.get("timestamp") or "").replace("T", " ")[:19]
+            conn.execute(
+                """INSERT INTO snapshots
+                   (server_id, ts, online, player_count, max_players, latency)
+                   VALUES (?, COALESCE(NULLIF(?, ''), datetime('now', 'localtime')), ?, ?, ?, ?)""",
+                (
+                    server_id,
+                    ts,
+                    int(bool(item.get("online"))),
+                    item.get("players_online"),
+                    item.get("players_max"),
+                    item.get("latency"),
+                ),
+            )
 
 
 def list_servers():
@@ -152,26 +219,19 @@ def history_page(server_id: int, page: int = 1, page_size: int = 60):
         return _attach_players(conn, snaps)
 
 
-def chart_history(server_id: int, start_ts: str | None = None, end_ts: str | None = None):
-    """图表快照（按时间升序），默认最近 24 小时。"""
-    conditions = ["server_id = ?"]
-    params = [server_id]
-    if start_ts:
-        conditions.append("ts >= ?")
-        params.append(start_ts)
-    else:
-        conditions.append("ts >= datetime('now', 'localtime', '-24 hours')")
-    if end_ts:
-        conditions.append("ts <= ?")
-        params.append(end_ts)
-    where = " AND ".join(conditions)
+def chart_history(server_id: int, limit: int = 100):
+    """图表快照（按时间升序），取最近 limit 条。"""
     with get_conn() as conn:
         rows = conn.execute(
-            f"""SELECT id, ts, online, player_count, max_players, latency
-                FROM snapshots
-                WHERE {where}
-                ORDER BY ts ASC""",
-            params,
+            """SELECT * FROM (
+                   SELECT id, ts, online, player_count, max_players, latency
+                   FROM snapshots
+                   WHERE server_id = ?
+                   ORDER BY id DESC
+                   LIMIT ?
+               )
+               ORDER BY id ASC""",
+            (server_id, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 

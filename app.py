@@ -80,19 +80,12 @@ async def server_detail(request: Request, server_id: int):
     )
 
 
-def normalize_dt(value: str | None):
-    if not value:
-        return None
-    return value.replace("T", " ")[:16]
-
-
 @app.get("/server/{server_id}/history")
 async def server_history(
     request: Request,
     server_id: int,
     page: int = 1,
-    chart_start: str | None = None,
-    chart_end: str | None = None,
+    chart_limit: int = 100,
 ):
     server = db.get_server(server_id)
     if not server:
@@ -100,8 +93,9 @@ async def server_history(
     total = db.history_count(server_id)
     total_pages = max(1, ceil(total / HISTORY_PAGE_SIZE))
     page = min(max(page, 1), total_pages)
+    chart_limit = min(max(chart_limit, 50), 500)
     rows = db.history_page(server_id, page, HISTORY_PAGE_SIZE)
-    chart_rows = db.chart_history(server_id, normalize_dt(chart_start), normalize_dt(chart_end))
+    chart_rows = db.chart_history(server_id, chart_limit)
     start_index = (page - 1) * HISTORY_PAGE_SIZE + 1 if total else 0
     end_index = min(page * HISTORY_PAGE_SIZE, total)
     return templates.TemplateResponse(
@@ -117,8 +111,7 @@ async def server_history(
             "total_pages": total_pages,
             "start_index": start_index,
             "end_index": end_index,
-            "chart_start": chart_start or "",
-            "chart_end": chart_end or "",
+            "chart_limit": chart_limit,
         },
     )
 
@@ -189,4 +182,4 @@ async def api_history(server_id: int, limit: int = 200):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=18000)
+    uvicorn.run(app, host="0.0.0.0", port=18006)
