@@ -2,6 +2,7 @@
 import asyncio
 import contextlib
 import sqlite3
+from math import ceil
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -12,6 +13,7 @@ from mcstatus import JavaServer
 import db
 
 POLL_INTERVAL = 60  # 秒
+HISTORY_PAGE_SIZE = 60
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -78,14 +80,46 @@ async def server_detail(request: Request, server_id: int):
     )
 
 
+def normalize_dt(value: str | None):
+    if not value:
+        return None
+    return value.replace("T", " ")[:16]
+
+
 @app.get("/server/{server_id}/history")
-async def server_history(request: Request, server_id: int, limit: int = 200):
+async def server_history(
+    request: Request,
+    server_id: int,
+    page: int = 1,
+    chart_start: str | None = None,
+    chart_end: str | None = None,
+):
     server = db.get_server(server_id)
     if not server:
         raise HTTPException(404)
-    rows = db.history(server_id, limit)
+    total = db.history_count(server_id)
+    total_pages = max(1, ceil(total / HISTORY_PAGE_SIZE))
+    page = min(max(page, 1), total_pages)
+    rows = db.history_page(server_id, page, HISTORY_PAGE_SIZE)
+    chart_rows = db.chart_history(server_id, normalize_dt(chart_start), normalize_dt(chart_end))
+    start_index = (page - 1) * HISTORY_PAGE_SIZE + 1 if total else 0
+    end_index = min(page * HISTORY_PAGE_SIZE, total)
     return templates.TemplateResponse(
-        request, "history.html", {"server": server, "rows": rows, "limit": limit}
+        request,
+        "history.html",
+        {
+            "server": server,
+            "rows": rows,
+            "chart_rows": chart_rows,
+            "page": page,
+            "page_size": HISTORY_PAGE_SIZE,
+            "total": total,
+            "total_pages": total_pages,
+            "start_index": start_index,
+            "end_index": end_index,
+            "chart_start": chart_start or "",
+            "chart_end": chart_end or "",
+        },
     )
 
 

@@ -35,6 +35,8 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_snapshots_server_ts
                 ON snapshots(server_id, ts DESC);
+            CREATE INDEX IF NOT EXISTS idx_snapshots_server_id
+                ON snapshots(server_id, id DESC);
             CREATE TABLE IF NOT EXISTS snapshot_players (
                 snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
                 player_name TEXT NOT NULL
@@ -112,24 +114,69 @@ def latest_snapshot(server_id: int):
         return snap, players
 
 
-def history(server_id: int, limit: int = 200):
-    """最近 limit 条快照（按时间升序返回），每条附带玩家样本"""
+def _attach_players(conn, snaps):
+    if not snaps:
+        return []
+    snap_ids = [s["id"] for s in snaps]
+    placeholders = ",".join("?" for _ in snap_ids)
+    players_by_snapshot = {sid: [] for sid in snap_ids}
+    for row in conn.execute(
+        f"""SELECT snapshot_id, player_name FROM snapshot_players
+            WHERE snapshot_id IN ({placeholders})
+            ORDER BY snapshot_id, lower(player_name), player_name""",
+        snap_ids,
+    ):
+        players_by_snapshot[row["snapshot_id"]].append(row["player_name"])
+    return [{**dict(s), "players": players_by_snapshot[s["id"]]} for s in snaps]
+
+
+def history_count(server_id: int):
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM snapshots WHERE server_id = ?",
+            (server_id,),
+        ).fetchone()[0]
+
+
+def history_page(server_id: int, page: int = 1, page_size: int = 60):
+    """分页历史快照（最新优先），每条附带排序后的玩家样本。"""
+    offset = (page - 1) * page_size
     with get_conn() as conn:
         snaps = conn.execute(
-            "SELECT * FROM snapshots WHERE server_id = ? ORDER BY id DESC LIMIT ?",
-            (server_id, limit),
+            """SELECT * FROM snapshots
+               WHERE server_id = ?
+               ORDER BY id DESC
+               LIMIT ? OFFSET ?""",
+            (server_id, page_size, offset),
         ).fetchall()
-        snaps = list(reversed(snaps))
-        result = []
-        for s in snaps:
-            players = [
-                r["player_name"]
-                for r in conn.execute(
-                    """SELECT player_name FROM snapshot_players
-                       WHERE snapshot_id = ?
-                       ORDER BY lower(player_name), player_name""",
-                    (s["id"],),
-                )
-            ]
-            result.append({**dict(s), "players": players})
-        return result
+        return _attach_players(conn, snaps)
+
+
+def chart_history(server_id: int, start_ts: str | None = None, end_ts: str | None = None):
+    """图表快照（按时间升序），默认最近 24 小时。"""
+    conditions = ["server_id = ?"]
+    params = [server_id]
+    if start_ts:
+        conditions.append("ts >= ?")
+        params.append(start_ts)
+    else:
+        conditions.append("ts >= datetime('now', 'localtime', '-24 hours')")
+    if end_ts:
+        conditions.append("ts <= ?")
+        params.append(end_ts)
+    where = " AND ".join(conditions)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT id, ts, online, player_count, max_players, latency
+                FROM snapshots
+                WHERE {where}
+                ORDER BY ts ASC""",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def history(server_id: int, limit: int = 200):
+    """最近 limit 条快照（按时间升序返回），每条附带玩家样本。"""
+    rows = history_page(server_id, 1, limit)
+    return list(reversed(rows))
