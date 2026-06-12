@@ -236,6 +236,38 @@ def chart_history(server_id: int, limit: int = 100):
         return [dict(r) for r in rows]
 
 
+def range_history(server_id: int, hours: int = 24):
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT id, ts, online, player_count, max_players, latency
+               FROM snapshots
+               WHERE server_id = ?
+                 AND ts >= datetime('now', 'localtime', ?)
+               ORDER BY ts ASC""",
+            (server_id, f"-{hours} hours"),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def player_summary(server_id: int, hours: int = 24):
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT sp.player_name AS name,
+                      COUNT(*) AS sightings,
+                      MIN(s.ts) AS first_seen,
+                      MAX(s.ts) AS last_seen
+               FROM snapshot_players sp
+               JOIN snapshots s ON s.id = sp.snapshot_id
+               WHERE s.server_id = ?
+                 AND s.online = 1
+                 AND s.ts >= datetime('now', 'localtime', ?)
+               GROUP BY sp.player_name
+               ORDER BY sightings DESC, lower(sp.player_name), sp.player_name""",
+            (server_id, f"-{hours} hours"),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def history(server_id: int, limit: int = 200):
     """最近 limit 条快照（按时间升序返回），每条附带玩家样本。"""
     rows = history_page(server_id, 1, limit)

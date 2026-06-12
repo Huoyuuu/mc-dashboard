@@ -85,7 +85,7 @@ async def server_history(
     request: Request,
     server_id: int,
     page: int = 1,
-    chart_limit: int = 100,
+    hours: int = 24,
 ):
     server = db.get_server(server_id)
     if not server:
@@ -93,9 +93,19 @@ async def server_history(
     total = db.history_count(server_id)
     total_pages = max(1, ceil(total / HISTORY_PAGE_SIZE))
     page = min(max(page, 1), total_pages)
-    chart_limit = min(max(chart_limit, 50), 500)
+    hours = hours if hours in {6, 24, 168, 720} else 24
     rows = db.history_page(server_id, page, HISTORY_PAGE_SIZE)
-    chart_rows = db.chart_history(server_id, chart_limit)
+    chart_rows = db.range_history(server_id, hours)
+    online_rows = [r for r in chart_rows if r["online"]]
+    online_checks = len(online_rows)
+    stats = {
+        "uptime": round(online_checks / len(chart_rows) * 100, 1) if chart_rows else None,
+        "avg_players": round(sum((r["player_count"] or 0) for r in online_rows) / online_checks, 1) if online_checks else None,
+        "peak": max((r["player_count"] or 0) for r in online_rows) if online_rows else None,
+        "avg_latency": round(sum((r["latency"] or 0) for r in online_rows if r["latency"] is not None) / len([r for r in online_rows if r["latency"] is not None]), 1) if any(r["latency"] is not None for r in online_rows) else None,
+        "checks": len(chart_rows),
+        "online_checks": online_checks,
+    }
     start_index = (page - 1) * HISTORY_PAGE_SIZE + 1 if total else 0
     end_index = min(page * HISTORY_PAGE_SIZE, total)
     return templates.TemplateResponse(
@@ -111,7 +121,9 @@ async def server_history(
             "total_pages": total_pages,
             "start_index": start_index,
             "end_index": end_index,
-            "chart_limit": chart_limit,
+            "hours": hours,
+            "stats": stats,
+            "player_summary": db.player_summary(server_id, hours),
         },
     )
 

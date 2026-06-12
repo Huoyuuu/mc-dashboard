@@ -1,139 +1,192 @@
 {% extends "base.html" %}
-{% block title %}{{ server.name }} · 历史数据{% endblock %}
+{% block title %}{{ server.name }} · 巡查日志{% endblock %}
+
 {% block content %}
 {% set rows = rows | default([]) %}
-{% set chart_rows = chart_rows | default(rows) %}
+{% set chart_rows = chart_rows | default([]) %}
+{% set player_summary = player_summary | default([]) %}
+{% set stats = stats | default({}) %}
 {% set page = page | default(1) | int %}
 {% set page_size = page_size | default(60) | int %}
 {% set total = total | default(rows | length) | int %}
 {% set total_pages = total_pages | default(1) | int %}
 {% set start_index = start_index | default(1 if total else 0) | int %}
 {% set end_index = end_index | default(rows | length) | int %}
-{% set chart_limit = chart_limit | default(100) | int %}
-<div class="flex items-center gap-3 mb-7">
-  <a href="/server/{{ server.id }}" class="grid place-items-center w-9 h-9 rounded-xl bg-white border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-300 shadow-sm transition">
-    <i data-lucide="arrow-left" class="w-4.5 h-4.5"></i>
-  </a>
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight leading-tight">{{ server.name }}</h1>
-    <p class="text-xs text-stone-400">历史数据 · 共 {{ total }} 条记录 · 第 {{ page }} / {{ total_pages }} 页</p>
+{% set hours = hours | default(24) | int %}
+
+<a href="/server/{{ server.id }}" class="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink transition-colors mb-5">
+  <i data-lucide="arrow-left"></i>返回详情
+</a>
+
+<div class="flex flex-wrap items-end gap-4 mb-6 fade-in">
+  <div class="min-w-0">
+    <h1 class="font-serif text-2xl leading-tight">{{ server.name }} · 巡查日志</h1>
+    <div class="text-sm text-ink-faint font-mono mt-0.5">{{ server.address }}</div>
+  </div>
+  <div class="ml-auto inline-flex rounded-md border hairline bg-paper-50 overflow-hidden text-sm">
+    {% for h, label in [(6, '6 小时'), (24, '24 小时'), (168, '7 天'), (720, '30 天')] %}
+    <a href="?hours={{ h }}&page={{ page }}"
+       class="px-3 py-1.5 transition-colors {{ 'bg-ink text-paper-50' if hours == h else 'text-ink-soft hover:text-ink hover:bg-paper-150' }}">{{ label }}</a>
+    {% endfor %}
   </div>
 </div>
 
-<div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm mb-5">
-  <div class="flex flex-wrap items-end gap-3 mb-3">
-    <p class="text-xs font-medium text-stone-500 flex items-center gap-1.5 mr-auto"><i data-lucide="line-chart" class="w-3.5 h-3.5"></i> 在线人数趋势</p>
-    <form method="get" class="flex flex-wrap items-end gap-2">
-      <input type="hidden" name="page" value="{{ page }}">
-      <select name="chart_limit" onchange="this.form.submit()"
-              class="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
-        <option value="50" {{ 'selected' if chart_limit == 50 else '' }}>最近 50 条</option>
-        <option value="100" {{ 'selected' if chart_limit == 100 else '' }}>最近 100 条</option>
-        <option value="200" {{ 'selected' if chart_limit == 200 else '' }}>最近 200 条</option>
-        <option value="500" {{ 'selected' if chart_limit == 500 else '' }}>最近 500 条</option>
-      </select>
-    </form>
-  </div>
-  <canvas id="chart" height="80"></canvas>
-</div>
+<dl class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8 fade-in">
+  <div class="bg-paper-50 border hairline rounded-md p-3 shadow-paper"><dt class="text-xs text-ink-faint mb-1">在线率</dt><dd class="text-lg num">{{ stats.uptime ~ '%' if stats.uptime is not none else '—' }}</dd></div>
+  <div class="bg-paper-50 border hairline rounded-md p-3 shadow-paper"><dt class="text-xs text-ink-faint mb-1">平均在线</dt><dd class="text-lg num">{{ stats.avg_players if stats.avg_players is not none else '—' }}</dd></div>
+  <div class="bg-paper-50 border hairline rounded-md p-3 shadow-paper"><dt class="text-xs text-ink-faint mb-1">峰值</dt><dd class="text-lg num">{{ stats.peak if stats.peak is not none else '—' }}</dd></div>
+  <div class="bg-paper-50 border hairline rounded-md p-3 shadow-paper"><dt class="text-xs text-ink-faint mb-1">平均延迟</dt><dd class="text-lg num">{{ stats.avg_latency ~ ' ms' if stats.avg_latency is not none else '—' }}</dd></div>
+  <div class="bg-paper-50 border hairline rounded-md p-3 shadow-paper"><dt class="text-xs text-ink-faint mb-1">巡查次数</dt><dd class="text-lg num">{{ stats.checks if stats.checks is not none else '—' }}</dd></div>
+</dl>
 
-<div class="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-  <table class="w-full text-sm">
-    <thead class="bg-stone-50 text-stone-500 text-xs">
-      <tr>
-        <th class="text-left px-5 py-3 font-medium">时间</th>
-        <th class="text-left px-5 py-3 font-medium">状态</th>
-        <th class="text-left px-5 py-3 font-medium">玩家数</th>
-        <th class="text-left px-5 py-3 font-medium">延迟</th>
-        <th class="text-left px-5 py-3 font-medium">在线玩家</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-stone-100">
-      {% for r in rows %}
-      <tr class="hover:bg-stone-50/70 transition">
-        <td class="px-5 py-2.5 text-stone-500 whitespace-nowrap tabular-nums">{{ r.ts }}</td>
-        <td class="px-5 py-2.5">
-          {% if r.online %}
-          <span class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>在线
-          </span>
-          {% else %}
-          <span class="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-0.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-stone-400"></span>离线
-          </span>
-          {% endif %}
-        </td>
-        <td class="px-5 py-2.5 tabular-nums">{{ r.player_count if r.online else '—' }}{% if r.online %}<span class="text-stone-400">/{{ r.max_players }}</span>{% endif %}</td>
-        <td class="px-5 py-2.5 tabular-nums">{{ (r.latency ~ ' ms') if r.online and r.latency is not none else '—' }}</td>
-        <td class="px-5 py-2.5">
-          {% if r.players %}
-          <div class="flex items-center -space-x-1.5">
-            {% for p in r.players[:10] %}
-            <img src="https://mc-heads.net/avatar/{{ p }}/24" alt="{{ p }}" title="{{ p }}"
-                 class="avatar w-6 h-6 rounded-md ring-2 ring-white shadow-sm" loading="lazy">
-            {% endfor %}
-            {% if r.players | length > 10 %}
-            <span class="pl-3 text-xs text-stone-400">+{{ r.players | length - 10 }}</span>
+<section class="mb-8 fade-in">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="w-1 h-5 bg-seal rounded-sm"></span>
+    <h2 class="font-serif text-xl">在线人数</h2>
+    <span class="flex-1 border-t border-dashed hairline"></span>
+  </div>
+  <div class="bg-paper-50 border hairline rounded-lg shadow-paper p-4">
+    <div class="h-56"><canvas id="chPlayers"></canvas></div>
+  </div>
+</section>
+
+<section class="mb-8 fade-in">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="w-1 h-5 bg-seal rounded-sm"></span>
+    <h2 class="font-serif text-xl">延迟</h2>
+    <span class="flex-1 border-t border-dashed hairline"></span>
+  </div>
+  <div class="bg-paper-50 border hairline rounded-lg shadow-paper p-4">
+    <div class="h-40"><canvas id="chLatency"></canvas></div>
+  </div>
+</section>
+
+<section class="mb-8 fade-in">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="w-1 h-5 bg-seal rounded-sm"></span>
+    <h2 class="font-serif text-xl">玩家出现名册</h2>
+    <span class="text-xs text-ink-faint num">· 共 {{ player_summary | length }} 人</span>
+    <span class="flex-1 border-t border-dashed hairline"></span>
+  </div>
+  {% if player_summary %}
+  <div class="grid gap-3 sm:grid-cols-2">
+    {% for p in player_summary %}
+    {% set rate = ((p.sightings / stats.online_checks * 100) | round | int) if stats.online_checks else 0 %}
+    <div class="bg-paper-50 border hairline rounded-md shadow-paper p-3 flex items-center gap-3">
+      <img src="https://mc-heads.net/avatar/{{ p.name }}/36" alt="{{ p.name }}" class="w-9 h-9 rounded" loading="lazy" style="image-rendering:pixelated">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-baseline gap-2 flex-wrap">
+          <span class="font-mono text-sm truncate">{{ p.name }}</span>
+          <span class="text-xs text-ink-faint num">出现 {{ p.sightings }} 次 · 在场率 {{ rate }}%</span>
+        </div>
+        <div class="h-1 rounded bg-paper-200 mt-1.5 overflow-hidden"><div class="h-full bg-ink/70" style="width:{{ rate }}%"></div></div>
+        <div class="text-[10px] text-ink-faint num mt-1">最近 {{ p.last_seen }} · 最早 {{ p.first_seen }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="border-2 border-dashed hairline rounded-lg p-8 text-center text-ink-faint text-sm">该时段内没有记录到玩家。（服务器可能隐藏了玩家列表）</div>
+  {% endif %}
+  <p class="text-xs text-ink-faint mt-3">仅记录服务器公开的玩家样本；在场率 = 该玩家被记录到的次数 / 该时段在线巡查次数。</p>
+</section>
+
+<section class="fade-in">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="w-1 h-5 bg-seal rounded-sm"></span>
+    <h2 class="font-serif text-xl">巡查记录</h2>
+    <span class="text-xs text-ink-faint num">· 第 {{ page }} / {{ total_pages }} 页 · {{ start_index }}-{{ end_index }} / {{ total }}</span>
+    <span class="flex-1 border-t border-dashed hairline"></span>
+  </div>
+  <div class="bg-paper-50 border hairline rounded-lg shadow-paper overflow-x-auto">
+    <table class="w-full min-w-[640px] text-sm">
+      <thead>
+        <tr class="text-left text-xs text-ink-faint border-b hairline">
+          <th class="px-4 py-2.5 font-normal">时间</th>
+          <th class="px-4 py-2.5 font-normal">状态</th>
+          <th class="px-4 py-2.5 font-normal">在线</th>
+          <th class="px-4 py-2.5 font-normal">延迟</th>
+          <th class="px-4 py-2.5 font-normal">在线玩家</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="border-b hairline last:border-0 align-top">
+          <td class="px-4 py-2.5 num whitespace-nowrap text-ink-soft">{{ r.ts }}</td>
+          <td class="px-4 py-2.5">
+            {% if r.online %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-moss-wash text-moss border border-moss-line"><span class="w-1.5 h-1.5 rounded-full bg-moss animate-pulse"></span>在线</span>
+            {% else %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rust-wash text-rust border border-rust-line"><span class="w-1.5 h-1.5 rounded-full bg-rust"></span>离线</span>
             {% endif %}
-          </div>
-          {% else %}
-          <span class="text-stone-300">—</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="px-5 py-10 text-center text-stone-400">暂无历史数据</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+          </td>
+          <td class="px-4 py-2.5 num">{{ (r.player_count ~ ' / ' ~ r.max_players) if r.online else '—' }}</td>
+          <td class="px-4 py-2.5 num">{{ (r.latency ~ ' ms') if r.online and r.latency is not none else '—' }}</td>
+          <td class="px-4 py-2.5">
+            {% if not r.online %}
+            <span class="text-ink-faint">—</span>
+            {% elif r.players %}
+            <span class="flex flex-wrap gap-1 items-center">
+              {% for p in r.players[:6] %}
+              <span class="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded border hairline bg-paper-50">
+                <img src="https://mc-heads.net/avatar/{{ p }}/18" alt="{{ p }}" class="w-[18px] h-[18px] rounded" loading="lazy" style="image-rendering:pixelated">
+                <span class="font-mono text-xs">{{ p }}</span>
+              </span>
+              {% endfor %}
+              {% if r.players | length > 6 %}<span class="text-xs text-ink-faint" title="{{ r.players | join(', ') }}">+{{ r.players | length - 6 }}</span>{% endif %}
+            </span>
+            {% else %}
+            <span class="text-ink-faint">无记录</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-8 text-center text-ink-faint">还没有巡查记录。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-<div class="flex flex-wrap items-center gap-2 mt-4 text-sm">
-  <span class="text-stone-400 mr-auto">显示第 {{ start_index }}-{{ end_index }} 条，每页 {{ page_size }} 条</span>
-  {% set chart_query = '&chart_limit=' ~ chart_limit %}
-  {% if page > 1 %}
-  <a href="?page={{ page - 1 }}{{ chart_query }}" class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 font-medium shadow-sm hover:bg-stone-50 transition"><i data-lucide="chevron-left" class="w-4 h-4"></i> 上一页</a>
-  {% endif %}
-  <form method="get" class="inline-flex items-center gap-2">
-    <input type="hidden" name="chart_limit" value="{{ chart_limit }}">
-    <input type="number" name="page" min="1" max="{{ total_pages }}" value="{{ page }}"
-           class="w-20 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
-    <button class="rounded-xl bg-stone-900 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-stone-700 active:scale-[0.98] transition">跳转</button>
-  </form>
-  {% if page < total_pages %}
-  <a href="?page={{ page + 1 }}{{ chart_query }}" class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 font-medium shadow-sm hover:bg-stone-50 transition">下一页 <i data-lucide="chevron-right" class="w-4 h-4"></i></a>
-  {% endif %}
-</div>
+  <div class="flex flex-wrap items-center gap-2 mt-4 text-sm">
+    {% set hq = '&hours=' ~ hours %}
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}{{ hq }}" class="inline-flex items-center gap-1.5 rounded-md border hairline bg-paper-50 px-3 py-1.5 text-ink-soft shadow-paper hover:text-ink transition"><i data-lucide="chevron-left"></i>上一页</a>
+    {% endif %}
+    <form method="get" class="inline-flex items-center gap-2 ml-auto">
+      <input type="hidden" name="hours" value="{{ hours }}">
+      <input type="number" name="page" min="1" max="{{ total_pages }}" value="{{ page }}" class="w-20 rounded-md border hairline bg-paper-50 px-3 py-1.5 text-sm num">
+      <button class="rounded-md bg-ink text-paper-50 px-3 py-1.5 text-sm shadow-paper">跳转</button>
+    </form>
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}{{ hq }}" class="inline-flex items-center gap-1.5 rounded-md border hairline bg-paper-50 px-3 py-1.5 text-ink-soft shadow-paper hover:text-ink transition">下一页<i data-lucide="chevron-right"></i></a>
+    {% endif %}
+  </div>
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
-  const rows = {{ chart_rows | default(rows | default([])) | tojson }};
-  const formatTick = (value) => value ? value.slice(5, 16) : '';
-  new Chart(document.getElementById('chart'), {
+  const rows = {{ chart_rows | tojson }};
+  const hours = {{ hours }};
+  const labels = rows.map(r => hours <= 24 ? fmtT(r.ts) : fmtDT(r.ts));
+
+  new Chart(document.getElementById('chPlayers'), {
     type: 'line',
-    data: {
-      labels: rows.map(r => formatTick(r.ts)),
-      datasets: [{
-        label: '在线人数',
-        data: rows.map(r => r.online ? r.player_count : null),
-        borderColor: '#059669',
-        backgroundColor: 'rgba(5,150,105,0.08)',
-        fill: true,
-        tension: 0.35,
-        pointRadius: 2,
-        pointBackgroundColor: '#059669',
-        spanGaps: false,
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f5f5f4' } },
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } }
-      }
-    }
+    data: { labels, datasets: [
+      { label: '在线玩家', data: rows.map(r => r.online ? r.player_count : null), borderColor: '#26221C', borderWidth: 1.6, backgroundColor: 'rgba(38,34,28,.06)', fill: true, tension: .3, pointRadius: 0, spanGaps: false },
+      { label: '容量', data: rows.map(r => r.online ? r.max_players : null), borderColor: '#C2B89F', borderWidth: 1.2, borderDash: [4, 3], fill: false, tension: .3, pointRadius: 0, spanGaps: false }
+    ]},
+    options: paperOpts({ legend: true })
   });
+
+  new Chart(document.getElementById('chLatency'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: '延迟 (ms)', data: rows.map(r => r.online ? r.latency : null), borderColor: '#A4443C', borderWidth: 1.4, fill: false, tension: .3, pointRadius: 0, spanGaps: false }
+    ]},
+    options: paperOpts()
+  });
+  refreshIcons();
 </script>
 {% endblock %}
