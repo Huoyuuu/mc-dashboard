@@ -75,6 +75,7 @@ def delete_server(server_id: int):
 
 def save_snapshot(server_id, online, player_count=None, max_players=None,
                   latency=None, version=None, motd=None, players=()):
+    players = sorted(set(players), key=str.casefold)
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO snapshots
@@ -102,7 +103,10 @@ def latest_snapshot(server_id: int):
         players = [
             r["player_name"]
             for r in conn.execute(
-                "SELECT player_name FROM snapshot_players WHERE snapshot_id = ?", (snap["id"],)
+                """SELECT player_name FROM snapshot_players
+                   WHERE snapshot_id = ?
+                   ORDER BY lower(player_name), player_name""",
+                (snap["id"],),
             )
         ]
         return snap, players
@@ -121,7 +125,10 @@ def history(server_id: int, limit: int = 200):
             players = [
                 r["player_name"]
                 for r in conn.execute(
-                    "SELECT player_name FROM snapshot_players WHERE snapshot_id = ?", (s["id"],)
+                    """SELECT player_name FROM snapshot_players
+                       WHERE snapshot_id = ?
+                       ORDER BY lower(player_name), player_name""",
+                    (s["id"],),
                 )
             ]
             result.append({**dict(s), "players": players})
