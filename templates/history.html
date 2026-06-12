@@ -71,7 +71,7 @@
   {% if player_summary %}
   <div class="grid gap-3 sm:grid-cols-2">
     {% for p in player_summary %}
-    {% set rate = ((p.sightings / stats.online_checks * 100) | round | int) if stats.online_checks else 0 %}
+    {% set rate = ((p.sightings / stats.player_present_checks * 100) | round | int) if stats.player_present_checks else 0 %}
     <div class="bg-paper-50 border hairline rounded-md shadow-paper p-3 flex items-center gap-3">
       <img src="https://mc-heads.net/avatar/{{ p.name }}/36" alt="{{ p.name }}" class="w-9 h-9 rounded" loading="lazy" style="image-rendering:pixelated">
       <div class="min-w-0 flex-1">
@@ -88,7 +88,7 @@
   {% else %}
   <div class="border-2 border-dashed hairline rounded-lg p-8 text-center text-ink-faint text-sm">该时段内没有记录到玩家。（服务器可能隐藏了玩家列表）</div>
   {% endif %}
-  <p class="text-xs text-ink-faint mt-3">仅记录服务器公开的玩家样本；在场率 = 该玩家被记录到的次数 / 该时段在线巡查次数。</p>
+  <p class="text-xs text-ink-faint mt-3">仅记录服务器公开的玩家样本；在场率 = 该玩家被记录到的次数 / 该时段内至少有 1 名玩家在线的巡查次数。</p>
 </section>
 
 <section class="fade-in">

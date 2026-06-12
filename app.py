@@ -98,6 +98,7 @@ async def server_history(
     chart_rows = db.range_history(server_id, hours)
     online_rows = [r for r in chart_rows if r["online"]]
     online_checks = len(online_rows)
+    player_present_checks = sum(1 for r in online_rows if (r["player_count"] or 0) > 0)
     stats = {
         "uptime": round(online_checks / len(chart_rows) * 100, 1) if chart_rows else None,
         "avg_players": round(sum((r["player_count"] or 0) for r in online_rows) / online_checks, 1) if online_checks else None,
@@ -105,6 +106,7 @@ async def server_history(
         "avg_latency": round(sum((r["latency"] or 0) for r in online_rows if r["latency"] is not None) / len([r for r in online_rows if r["latency"] is not None]), 1) if any(r["latency"] is not None for r in online_rows) else None,
         "checks": len(chart_rows),
         "online_checks": online_checks,
+        "player_present_checks": player_present_checks,
     }
     start_index = (page - 1) * HISTORY_PAGE_SIZE + 1 if total else 0
     end_index = min(page * HISTORY_PAGE_SIZE, total)
