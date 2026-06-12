@@ -59,6 +59,15 @@ def add_server(name: str, address: str):
         conn.execute("INSERT OR IGNORE INTO servers (name, address) VALUES (?, ?)", (name, address))
 
 
+def update_server(server_id: int, name: str, address: str):
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE servers SET name = ?, address = ? WHERE id = ?",
+            (name, address, server_id),
+        )
+        return cur.rowcount
+
+
 def delete_server(server_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM servers WHERE id = ?", (server_id,))

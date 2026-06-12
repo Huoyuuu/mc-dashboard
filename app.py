@@ -1,6 +1,7 @@
 """Minecraft 服务器状态面板：FastAPI + mcstatus + SQLite"""
 import asyncio
 import contextlib
+import sqlite3
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -98,6 +99,24 @@ async def servers_add(name: str = Form(...), address: str = Form(...)):
     if servers:
         asyncio.create_task(poll_server(servers[0]))
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/servers/{server_id}/update")
+async def servers_update(server_id: int, name: str = Form(...), address: str = Form(...)):
+    clean_name = name.strip()
+    clean_address = address.strip()
+    if not clean_name or not clean_address:
+        raise HTTPException(400, "Name and address are required")
+    try:
+        updated = db.update_server(server_id, clean_name, clean_address)
+    except sqlite3.IntegrityError:
+        raise HTTPException(400, "Server address already exists") from None
+    if not updated:
+        raise HTTPException(404)
+    server = db.get_server(server_id)
+    if server:
+        asyncio.create_task(poll_server(server))
+    return RedirectResponse(f"/server/{server_id}", status_code=303)
 
 
 @app.post("/servers/{server_id}/delete")

@@ -28,6 +28,23 @@
   </div>
 </div>
 
+<form method="post" action="/servers/{{ server.id }}/update"
+      class="mb-5 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-end gap-3">
+  <div class="flex-1 min-w-40">
+    <label class="block text-xs font-medium text-stone-500 mb-1.5">名称</label>
+    <input name="name" required value="{{ server.name }}"
+           class="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
+  </div>
+  <div class="flex-[2] min-w-56">
+    <label class="block text-xs font-medium text-stone-500 mb-1.5">地址（host 或 host:port）</label>
+    <input name="address" required value="{{ server.address }}"
+           class="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
+  </div>
+  <button class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium shadow-sm hover:bg-stone-50 active:scale-[0.98] transition">
+    <i data-lucide="save" class="w-4 h-4"></i> 保存修改
+  </button>
+</form>
+
 {% if not snap %}
 <div class="text-center py-20 text-stone-400 bg-white border border-dashed border-stone-300 rounded-2xl">
   <i data-lucide="hourglass" class="w-10 h-10 mx-auto mb-3"></i>
