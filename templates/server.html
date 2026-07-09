@@ -1,107 +1,121 @@
 {% extends "base.html" %}
 {% block title %}{{ server.name }} · 详情{% endblock %}
 {% block content %}
-<div class="flex flex-wrap items-center gap-3 mb-7">
-  <a href="/" class="grid place-items-center w-9 h-9 rounded-xl bg-white border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-300 shadow-sm transition">
+<div class="flex flex-wrap items-center gap-3 mb-7 fade-in">
+  <a href="/" class="press grid place-items-center w-9 h-9 rounded-xl bg-paper-50 border hairline text-ink-soft hover:text-ink hover:border-ink/20 shadow-paper">
     <i data-lucide="arrow-left" class="w-4.5 h-4.5"></i>
   </a>
-  <div>
-    <h1 class="text-2xl font-semibold tracking-tight leading-tight">{{ server.name }}</h1>
-    <p class="text-xs text-stone-400 font-mono">{{ server.address }}</p>
+  <div class="min-w-0">
+    <h1 class="font-serif text-2xl font-semibold tracking-tight leading-tight truncate">{{ server.name }}</h1>
+    <p class="text-xs text-ink-faint font-mono">{{ server.address }}</p>
   </div>
   <div class="ml-auto flex items-center gap-2">
     <form method="post" action="/server/{{ server.id }}/refresh">
-      <button class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-stone-50 active:scale-[0.98] transition">
+      <button class="press inline-flex items-center gap-1.5 rounded-xl border hairline bg-paper-50 px-4 py-2 text-sm font-medium shadow-paper hover:bg-paper-100">
         <i data-lucide="refresh-cw" class="w-4 h-4"></i> 立即刷新
       </button>
     </form>
     <a href="/server/{{ server.id }}/history"
-       class="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-stone-700 active:scale-[0.98] transition">
+       class="press inline-flex items-center gap-1.5 rounded-xl bg-ink text-paper-50 px-4 py-2 text-sm font-medium shadow-paper hover:bg-black">
       <i data-lucide="history" class="w-4 h-4"></i> 历史数据
     </a>
     <form method="post" action="/servers/{{ server.id }}/delete"
           onsubmit="return confirm('确定删除该服务器及其全部历史数据？')">
-      <button class="grid place-items-center w-9 h-9 rounded-xl border border-red-200 text-red-500 bg-white shadow-sm hover:bg-red-50 transition" title="删除服务器">
+      <button class="press grid place-items-center w-9 h-9 rounded-xl border border-rust-line text-rust bg-paper-50 shadow-paper hover:bg-rust-wash" title="删除服务器">
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
     </form>
   </div>
 </div>
 
-<form method="post" action="/servers/{{ server.id }}/update"
-      class="mb-5 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-end gap-3">
-  <div class="flex-1 min-w-40">
-    <label class="block text-xs font-medium text-stone-500 mb-1.5">名称</label>
-    <input name="name" required value="{{ server.name }}"
-           class="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
-  </div>
-  <div class="flex-[2] min-w-56">
-    <label class="block text-xs font-medium text-stone-500 mb-1.5">地址（host 或 host:port）</label>
-    <input name="address" required value="{{ server.address }}"
-           class="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
-  </div>
-  <button class="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium shadow-sm hover:bg-stone-50 active:scale-[0.98] transition">
-    <i data-lucide="save" class="w-4 h-4"></i> 保存修改
-  </button>
-</form>
+<details class="mb-5 group fade-in">
+  <summary class="press inline-flex items-center gap-1.5 cursor-pointer select-none text-sm text-ink-soft hover:text-ink list-none">
+    <i data-lucide="pencil" class="w-3.5 h-3.5"></i> 编辑名称 / 地址
+    <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform group-open:rotate-180"></i>
+  </summary>
+  <form method="post" action="/servers/{{ server.id }}/update"
+        class="mt-3 bg-paper-50 border hairline rounded-2xl p-5 shadow-paper flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-40">
+      <label class="block text-xs font-medium text-ink-faint mb-1.5">名称</label>
+      <input name="name" required value="{{ server.name }}" autocomplete="off"
+             class="field w-full rounded-xl border hairline bg-paper-100 px-3.5 py-2.5 text-sm">
+    </div>
+    <div class="flex-[2] min-w-56">
+      <label class="block text-xs font-medium text-ink-faint mb-1.5">地址（host 或 host:port）</label>
+      <input name="address" required value="{{ server.address }}" autocomplete="off"
+             class="field w-full rounded-xl border hairline bg-paper-100 px-3.5 py-2.5 text-sm font-mono">
+    </div>
+    <button class="press inline-flex items-center gap-1.5 rounded-xl border hairline bg-paper-50 px-4 py-2.5 text-sm font-medium shadow-paper hover:bg-paper-100">
+      <i data-lucide="save" class="w-4 h-4"></i> 保存修改
+    </button>
+  </form>
+</details>
 
 {% if not snap %}
-<div class="text-center py-20 text-stone-400 bg-white border border-dashed border-stone-300 rounded-2xl">
-  <i data-lucide="hourglass" class="w-10 h-10 mx-auto mb-3"></i>
-  <p>暂无数据，等待首次查询…</p>
+<div class="text-center py-20 text-ink-faint bg-paper-50 border-2 border-dashed hairline rounded-2xl fade-in">
+  <span class="grid place-items-center w-14 h-14 mx-auto mb-4 rounded-2xl bg-paper-150 text-ink-faint">
+    <i data-lucide="hourglass" class="w-7 h-7"></i>
+  </span>
+  <p class="font-serif text-base text-ink-soft">暂无数据</p>
+  <p class="text-sm mt-1">正在等待首次查询，稍后自动刷新…</p>
 </div>
 {% else %}
 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-5">
-  <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-    <p class="text-xs font-medium text-stone-500 mb-2 flex items-center gap-1.5"><i data-lucide="power" class="w-3.5 h-3.5"></i> 状态</p>
+  <div class="bg-paper-50 border hairline rounded-2xl p-5 shadow-paper fade-in">
+    <p class="text-xs font-medium text-ink-faint mb-2 flex items-center gap-1.5"><i data-lucide="power" class="w-3.5 h-3.5"></i> 状态</p>
     {% if snap.online %}
-    <p class="text-xl font-semibold text-emerald-600 inline-flex items-center gap-2">
-      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>在线
+    <p class="text-xl font-semibold text-moss inline-flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-moss animate-pulse"></span>在线
     </p>
     {% else %}
-    <p class="text-xl font-semibold text-stone-400 inline-flex items-center gap-2">
-      <span class="w-2.5 h-2.5 rounded-full bg-stone-300"></span>离线
+    <p class="text-xl font-semibold text-rust inline-flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-rust"></span>离线
     </p>
     {% endif %}
   </div>
-  <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-    <p class="text-xs font-medium text-stone-500 mb-2 flex items-center gap-1.5"><i data-lucide="users" class="w-3.5 h-3.5"></i> 玩家</p>
-    <p class="text-xl font-semibold">{{ snap.player_count if snap.online else '—' }}<span class="text-sm text-stone-400 font-normal">{% if snap.online %} / {{ snap.max_players }}{% endif %}</span></p>
+  <div class="bg-paper-50 border hairline rounded-2xl p-5 shadow-paper fade-in">
+    <p class="text-xs font-medium text-ink-faint mb-2 flex items-center gap-1.5"><i data-lucide="users" class="w-3.5 h-3.5"></i> 玩家</p>
+    <p class="text-xl font-semibold num">{{ snap.player_count if snap.online else '—' }}<span class="text-sm text-ink-faint font-normal">{% if snap.online %} / {{ snap.max_players }}{% endif %}</span></p>
   </div>
-  <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-    <p class="text-xs font-medium text-stone-500 mb-2 flex items-center gap-1.5"><i data-lucide="activity" class="w-3.5 h-3.5"></i> 延迟</p>
-    <p class="text-xl font-semibold">{{ snap.latency ~ ' ms' if snap.online else '—' }}</p>
+  <div class="bg-paper-50 border hairline rounded-2xl p-5 shadow-paper fade-in">
+    <p class="text-xs font-medium text-ink-faint mb-2 flex items-center gap-1.5"><i data-lucide="activity" class="w-3.5 h-3.5"></i> 延迟</p>
+    <p class="text-xl font-semibold num">{{ snap.latency ~ ' ms' if snap.online else '—' }}</p>
   </div>
-  <div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-    <p class="text-xs font-medium text-stone-500 mb-2 flex items-center gap-1.5"><i data-lucide="tag" class="w-3.5 h-3.5"></i> 版本</p>
+  <div class="bg-paper-50 border hairline rounded-2xl p-5 shadow-paper fade-in">
+    <p class="text-xs font-medium text-ink-faint mb-2 flex items-center gap-1.5"><i data-lucide="tag" class="w-3.5 h-3.5"></i> 版本</p>
     <p class="text-xl font-semibold truncate" title="{{ snap.version or '' }}">{{ snap.version if snap.online else '—' }}</p>
   </div>
 </div>
 
 {% if snap.motd %}
-<div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm mb-5">
-  <p class="text-xs font-medium text-stone-500 mb-2 flex items-center gap-1.5"><i data-lucide="message-square" class="w-3.5 h-3.5"></i> MOTD</p>
-  <p class="text-sm whitespace-pre-line bg-stone-900 text-stone-100 rounded-xl px-4 py-3 font-mono">{{ snap.motd }}</p>
+<div class="bg-paper-50 border hairline rounded-2xl p-5 shadow-paper mb-5 fade-in">
+  <p class="text-xs font-medium text-ink-faint mb-2 flex items-center gap-1.5"><i data-lucide="message-square" class="w-3.5 h-3.5"></i> MOTD</p>
+  <p class="text-sm whitespace-pre-line bg-ink text-paper-50 rounded-xl px-4 py-3 font-mono">{{ snap.motd }}</p>
 </div>
 {% endif %}
 
-<div class="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
-  <p class="text-xs font-medium text-stone-500 mb-3 flex items-center gap-1.5"><i data-lucide="user-round" class="w-3.5 h-3.5"></i> 在线玩家</p>
+<div class="bg-paper-50 border hairline rounded-2xl p-5 shadow-paper fade-in">
+  <p class="text-xs font-medium text-ink-faint mb-3 flex items-center gap-1.5"><i data-lucide="user-round" class="w-3.5 h-3.5"></i> 在线玩家
+    {% if players %}<span class="num text-ink-faint">&middot; {{ players | length }} 人</span>{% endif %}</p>
   {% if players %}
   <div class="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
     {% for p in players %}
-    <div class="flex items-center gap-2.5 rounded-xl bg-stone-50 border border-stone-200 px-3 py-2">
+    <div class="flex items-center gap-2.5 rounded-xl bg-paper-100 border hairline px-3 py-2">
       <img src="https://mc-heads.net/avatar/{{ p }}/32" alt="{{ p }}"
-           class="avatar w-8 h-8 rounded-lg shadow-sm" loading="lazy">
-      <span class="text-sm font-medium truncate">{{ p }}</span>
+           class="avatar w-8 h-8 rounded-lg shadow-sm" width="32" height="32" loading="lazy">
+      <span class="text-sm font-mono truncate">{{ p }}</span>
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <p class="text-sm text-stone-400">当前没有可显示的玩家</p>
+  <p class="text-sm text-ink-faint">当前没有可显示的玩家（服务器可能隐藏了玩家列表）。</p>
   {% endif %}
 </div>
 
-<p class="mt-4 text-xs text-stone-400 flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5"></i> 最后更新：{{ snap.ts }}</p>
+<p class="mt-4 text-xs text-ink-faint flex items-center gap-1.5 num"><i data-lucide="clock" class="w-3.5 h-3.5"></i> 最后更新：{{ snap.ts }} <span data-reltime="{{ snap.ts }}"></span></p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>autoRefresh(60);</script>
 {% endblock %}

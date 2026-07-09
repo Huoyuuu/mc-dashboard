@@ -13,7 +13,11 @@ from mcstatus import JavaServer
 import db
 
 POLL_INTERVAL = 60  # 秒
+POLL_TIMEOUT = 15  # 单台服务器整次查询（含 DNS/SRV 解析）的硬超时，秒
 HISTORY_PAGE_SIZE = 60
+CHART_MAX_POINTS = 600  # 图表最多点数，超出则按时间桶聚合
+RETENTION_DAYS = 90  # 快照保留天数
+PRUNE_EVERY = 60  # 每多少个轮询周期清理一次过期快照（约 1 小时）
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -21,8 +25,12 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 async def poll_server(server) -> None:
     """查询单个服务器并写入快照"""
     try:
-        srv = await JavaServer.async_lookup(server["address"])
-        status = await asyncio.wait_for(srv.async_status(), timeout=10)
+        async def _query():
+            srv = await JavaServer.async_lookup(server["address"])
+            return srv, await srv.async_status()
+
+        # async_lookup 的 DNS/SRV 解析也可能挂死，超时须罩住整个流程
+        srv, status = await asyncio.wait_for(_query(), timeout=POLL_TIMEOUT)
         sample = status.players.sample or []
         motd = status.motd.to_plain() if hasattr(status.motd, "to_plain") else str(status.motd)
         db.save_snapshot(
@@ -40,9 +48,17 @@ async def poll_server(server) -> None:
 
 
 async def poll_loop():
+    cycle = 0
     while True:
-        servers = await asyncio.to_thread(db.list_servers)
-        await asyncio.gather(*(poll_server(s) for s in servers))
+        # 任何一次意外（如数据库瞬时锁定）都不应终结监控循环
+        try:
+            servers = await asyncio.to_thread(db.list_servers)
+            await asyncio.gather(*(poll_server(s) for s in servers))
+            cycle += 1
+            if cycle % PRUNE_EVERY == 0:
+                await asyncio.to_thread(db.prune_snapshots, RETENTION_DAYS)
+        except Exception:
+            pass
         await asyncio.sleep(POLL_INTERVAL)
 
 
@@ -62,9 +78,10 @@ app = FastAPI(title="MC 服务器状态面板", lifespan=lifespan)
 @app.get("/")
 async def index(request: Request):
     servers = db.list_servers()
+    latest = db.latest_snapshots()  # 一次查询取回全部最新快照，避免逐台往返
     cards = []
     for s in servers:
-        snap, players = db.latest_snapshot(s["id"])
+        snap, players = latest.get(s["id"], (None, []))
         cards.append({"server": s, "snap": snap, "players": players})
     return templates.TemplateResponse(request, "index.html", {"cards": cards})
 
@@ -78,6 +95,31 @@ async def server_detail(request: Request, server_id: int):
     return templates.TemplateResponse(
         request, "server.html", {"server": server, "snap": snap, "players": players}
     )
+
+
+def downsample(rows: list, max_points: int) -> list:
+    """把巡查快照按时间桶聚合到 max_points 以内，控制长区间页面体积。
+
+    每桶：人数取峰值、延迟取均值、玩家名单取并集；桶内只要有一次在线即视为在线。
+    """
+    if len(rows) <= max_points:
+        return rows
+    bucket_size = ceil(len(rows) / max_points)
+    out = []
+    for i in range(0, len(rows), bucket_size):
+        bucket = rows[i:i + bucket_size]
+        online_rows = [r for r in bucket if r["online"]]
+        latencies = [r["latency"] for r in online_rows if r["latency"] is not None]
+        names = sorted({p for r in online_rows for p in r.get("players", [])}, key=str.casefold)
+        out.append({
+            "ts": bucket[-1]["ts"],
+            "online": 1 if online_rows else 0,
+            "player_count": max((r["player_count"] or 0) for r in online_rows) if online_rows else None,
+            "max_players": next((r["max_players"] for r in reversed(online_rows) if r["max_players"] is not None), None),
+            "latency": round(sum(latencies) / len(latencies), 1) if latencies else None,
+            "players": names,
+        })
+    return out
 
 
 @app.get("/server/{server_id}/history")
@@ -110,13 +152,15 @@ async def server_history(
     }
     start_index = (page - 1) * HISTORY_PAGE_SIZE + 1 if total else 0
     end_index = min(page * HISTORY_PAGE_SIZE, total)
+    chart_points = downsample(chart_rows, CHART_MAX_POINTS)  # 统计用原始数据，图表用聚合后数据
     return templates.TemplateResponse(
         request,
         "history.html",
         {
             "server": server,
             "rows": rows,
-            "chart_rows": chart_rows,
+            "chart_rows": chart_points,
+            "chart_aggregated": len(chart_points) < len(chart_rows),
             "page": page,
             "page_size": HISTORY_PAGE_SIZE,
             "total": total,
@@ -134,9 +178,13 @@ async def server_history(
 
 @app.post("/servers/add")
 async def servers_add(name: str = Form(...), address: str = Form(...)):
-    db.add_server(name.strip(), address.strip())
-    # 新增后立即查询一次
-    servers = [s for s in db.list_servers() if s["address"] == address.strip()]
+    clean_name = name.strip()
+    clean_address = address.strip()
+    if not clean_name or not clean_address:
+        raise HTTPException(400, "Name and address are required")
+    db.add_server(clean_name, clean_address)
+    # 新增后立即查询一次（地址已存在时 add 为 no-op，这里也顺带触发一次刷新）
+    servers = [s for s in db.list_servers() if s["address"] == clean_address]
     if servers:
         asyncio.create_task(poll_server(servers[0]))
     return RedirectResponse("/", status_code=303)
@@ -190,6 +238,7 @@ async def api_servers():
 async def api_history(server_id: int, limit: int = 200):
     if not db.get_server(server_id):
         raise HTTPException(404)
+    limit = min(max(limit, 1), 2000)
     return db.history(server_id, limit)
 
 

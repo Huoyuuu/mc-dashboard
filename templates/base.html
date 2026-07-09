@@ -6,17 +6,26 @@
   <title>{% block title %}MC 服务器状态面板{% endblock %}</title>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    :root { --paper: #faf9f5; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
-      background: #fafaf9;
-      background-image: radial-gradient(#e7e5e4 1px, transparent 1px);
-      background-size: 24px 24px;
+      background: var(--paper);
+      background-image: radial-gradient(#e9e5da 1px, transparent 1px);
+      background-size: 22px 22px;
+      font-feature-settings: "cv11", "ss01";
     }
+    .font-serif { font-family: "Noto Serif SC", ui-serif, Georgia, serif; }
+    .font-mono, .num { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
     .avatar { image-rendering: pixelated; }
     .hairline { border-color: #e4decf; }
     .num { font-variant-numeric: tabular-nums; }
-    .fade-in { animation: fadeIn .25s ease-out; }
-    .shadow-paper { box-shadow: 0 1px 2px rgba(38,34,28,.05), 0 4px 14px rgba(38,34,28,.06); }
+    .fade-in { animation: fadeIn .28s cubic-bezier(.2,.7,.2,1) both; }
+    .shadow-paper { box-shadow: 0 1px 2px rgba(38,34,28,.04), 0 6px 18px rgba(38,34,28,.05); }
+    .shadow-paper-lg { box-shadow: 0 2px 6px rgba(38,34,28,.05), 0 16px 40px rgba(38,34,28,.08); }
     .bg-paper-50 { background-color: #fcfbf8; }
     .bg-paper-100 { background-color: #f7f5ef; }
     .bg-paper-150 { background-color: #f1eee5; }
@@ -26,7 +35,9 @@
     .text-ink-soft { color: #5a544a; }
     .text-ink-faint { color: #92897a; }
     .bg-ink { background-color: #26221c; }
+    .border-ink { border-color: #26221c; }
     .bg-seal { background-color: #a4443c; }
+    .text-seal { color: #a4443c; }
     .bg-moss-wash { background-color: #eef3ec; }
     .text-moss { color: #437051; }
     .border-moss-line { border-color: #cbdcc8; }
@@ -35,28 +46,45 @@
     .text-rust { color: #a8503a; }
     .border-rust-line { border-color: #e8cfc0; }
     .bg-rust { background-color: #a8503a; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+    .press { transition: transform .12s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease; }
+    .press:active { transform: translateY(1px) scale(.99); }
+    .lift { transition: transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .2s ease, border-color .2s ease; }
+    .lift:hover { transform: translateY(-2px); }
+    .field { transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease; }
+    .field:focus-visible { outline: none; border-color: #b9b09a; box-shadow: 0 0 0 3px rgba(164,68,60,.10); background-color: #fff; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .fade-in { animation: none; } }
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ded7c5; border-radius: 10px; border: 2px solid var(--paper); }
+    ::-webkit-scrollbar-thumb:hover { background: #cdc4ad; }
+    * { scrollbar-width: thin; scrollbar-color: #ded7c5 transparent; }
   </style>
 </head>
-<body class="min-h-screen text-stone-800 antialiased">
-  <header class="sticky top-0 z-10 border-b border-stone-200/80 bg-white/85 backdrop-blur">
-    <div class="mx-auto max-w-5xl px-6 py-4 flex items-center gap-3">
-      <span class="grid place-items-center w-9 h-9 rounded-xl bg-stone-900 text-white shadow-sm">
-        <i data-lucide="box" class="w-5 h-5"></i>
-      </span>
-      <a href="/" class="text-lg font-semibold tracking-tight">MC 服务器状态面板</a>
-      <span class="ml-auto inline-flex items-center gap-1.5 text-xs text-stone-500 bg-white border border-stone-200 rounded-full px-3 py-1.5 shadow-sm">
-        <span class="relative flex w-2 h-2">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-          <span class="relative inline-flex rounded-full w-2 h-2 bg-emerald-500"></span>
+<body class="min-h-screen text-ink antialiased">
+  <header class="sticky top-0 z-20 border-b hairline bg-[#fcfbf8]/80 backdrop-blur-md">
+    <div class="mx-auto max-w-5xl px-6 py-3.5 flex items-center gap-3">
+      <a href="/" class="flex items-center gap-3 group">
+        <span class="grid place-items-center w-9 h-9 rounded-xl bg-ink text-paper-50 shadow-paper press">
+          <i data-lucide="box" class="w-5 h-5"></i>
         </span>
-        每 60 秒自动轮询
+        <span class="font-serif text-lg font-semibold tracking-tight leading-none">MC 服务器状态面板</span>
+      </a>
+      <span class="ml-auto inline-flex items-center gap-1.5 text-xs text-ink-soft bg-paper-50 border hairline rounded-full px-3 py-1.5 shadow-paper">
+        <span class="relative flex w-2 h-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-moss opacity-50"></span>
+          <span class="relative inline-flex rounded-full w-2 h-2 bg-moss"></span>
+        </span>
+        每 60 秒自动巡查
       </span>
     </div>
   </header>
   <main class="mx-auto max-w-5xl px-6 py-8">
     {% block content %}{% endblock %}
   </main>
+  <footer class="mx-auto max-w-5xl px-6 pb-10 text-center text-xs text-ink-faint">
+    纸白监控台 · Minecraft Java 服务器 · mcstatus
+  </footer>
   <script>
     function esc(s) {
       return String(s ?? '').replace(/[&<>"']/g, function (c) {
@@ -72,6 +100,36 @@
       if (!value) return '—';
       const d = new Date(String(value).replace(' ', 'T'));
       return Number.isNaN(d.getTime()) ? value : d.toLocaleString('zh-CN', { hour:'2-digit', minute:'2-digit' });
+    }
+    function fmtRel(value) {
+      if (!value) return '';
+      const d = new Date(String(value).replace(' ', 'T'));
+      if (Number.isNaN(d.getTime())) return '';
+      const sec = Math.round((Date.now() - d.getTime()) / 1000);
+      if (sec < 0 || sec > 30 * 86400) return '';
+      if (sec < 60) return '刚刚';
+      if (sec < 3600) return Math.floor(sec / 60) + ' 分钟前';
+      if (sec < 86400) return Math.floor(sec / 3600) + ' 小时前';
+      return Math.floor(sec / 86400) + ' 天前';
+    }
+    // 把带 data-reltime 的时间戳补上相对时间描述，例如 “（3 分钟前）”
+    function applyRelTimes() {
+      document.querySelectorAll('[data-reltime]').forEach(function (el) {
+        const rel = fmtRel(el.getAttribute('data-reltime'));
+        el.textContent = rel ? '（' + rel + '）' : '';
+      });
+    }
+    // 定时整页刷新：页面隐藏或用户正在输入时跳过，等下一轮再试
+    function autoRefresh(seconds) {
+      let last = Date.now();
+      setInterval(function () {
+        if (Date.now() - last < seconds * 1000) return;
+        const el = document.activeElement;
+        const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+        if (document.hidden || typing) return;
+        last = Date.now();
+        location.reload();
+      }, 5000);
     }
     function avatarHTML(name, sizeCls) {
       const n = esc(name);
@@ -96,7 +154,7 @@
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: o.legend ? { display: true, position: 'top', align: 'end', labels: { color: '#5A544A', boxWidth: 18, boxHeight: 2, font: { size: 11 } } } : { display: false },
-          tooltip: { backgroundColor: '#26221C', titleColor: '#F7F5EF', bodyColor: '#EAE5D8', cornerRadius: 4, padding: 8, displayColors: false }
+          tooltip: { backgroundColor: '#26221C', titleColor: '#F7F5EF', bodyColor: '#EAE5D8', cornerRadius: 6, padding: 10, displayColors: false }
         },
         scales: {
           x: { grid: { display: false }, border: { color: '#DCD5C2' }, ticks: { color: '#92897A', font: { size: 10 }, maxTicksLimit: 8, maxRotation: 0 } },
@@ -106,6 +164,8 @@
     }
     function refreshIcons() { if (window.lucide) lucide.createIcons(); }
     refreshIcons();
+    applyRelTimes();
+    setInterval(applyRelTimes, 30000);
   </script>
   {% block scripts %}{% endblock %}
 </body>

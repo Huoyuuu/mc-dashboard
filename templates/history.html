@@ -48,6 +48,8 @@
   <div class="bg-paper-50 border hairline rounded-lg shadow-paper p-4">
     <div class="h-56"><canvas id="chPlayers"></canvas></div>
   </div>
+  <p class="text-xs text-ink-faint mt-2 flex items-center gap-1.5"><i data-lucide="mouse-pointer-2" class="w-3.5 h-3.5"></i>
+    悬停查看该时刻在线玩家 ID{% if chart_aggregated %}；时间跨度较长，图表已按时间段聚合（人数取峰值、延迟取均值）{% endif %}。</p>
 </section>
 
 <section class="mb-8 fade-in">
@@ -73,13 +75,13 @@
     {% for p in player_summary %}
     {% set rate = ((p.sightings / stats.player_present_checks * 100) | round | int) if stats.player_present_checks else 0 %}
     <div class="bg-paper-50 border hairline rounded-md shadow-paper p-3 flex items-center gap-3">
-      <img src="https://mc-heads.net/avatar/{{ p.name }}/36" alt="{{ p.name }}" class="w-9 h-9 rounded" loading="lazy" style="image-rendering:pixelated">
+      <img src="https://mc-heads.net/avatar/{{ p.name }}/36" alt="{{ p.name }}" class="w-9 h-9 rounded" width="36" height="36" loading="lazy" style="image-rendering:pixelated">
       <div class="min-w-0 flex-1">
         <div class="flex items-baseline gap-2 flex-wrap">
           <span class="font-mono text-sm truncate">{{ p.name }}</span>
           <span class="text-xs text-ink-faint num">出现 {{ p.sightings }} 次 · 在场率 {{ rate }}%</span>
         </div>
-        <div class="h-1 rounded bg-paper-200 mt-1.5 overflow-hidden"><div class="h-full bg-ink/70" style="width:{{ rate }}%"></div></div>
+        <div class="h-1 rounded bg-paper-200 mt-1.5 overflow-hidden"><div class="h-full bg-[#26221c]/70" style="width:{{ rate }}%"></div></div>
         <div class="text-[10px] text-ink-faint num mt-1">最近 {{ p.last_seen }} · 最早 {{ p.first_seen }}</div>
       </div>
     </div>
@@ -129,7 +131,7 @@
             <span class="flex flex-wrap gap-1 items-center">
               {% for p in r.players[:6] %}
               <span class="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded border hairline bg-paper-50">
-                <img src="https://mc-heads.net/avatar/{{ p }}/18" alt="{{ p }}" class="w-[18px] h-[18px] rounded" loading="lazy" style="image-rendering:pixelated">
+                <img src="https://mc-heads.net/avatar/{{ p }}/18" alt="{{ p }}" class="w-[18px] h-[18px] rounded" width="18" height="18" loading="lazy" style="image-rendering:pixelated">
                 <span class="font-mono text-xs">{{ p }}</span>
               </span>
               {% endfor %}
@@ -171,13 +173,30 @@
   const hours = {{ hours }};
   const labels = rows.map(r => hours <= 24 ? fmtT(r.ts) : fmtDT(r.ts));
 
+  // 有玩家记录的时刻画出圆点，悬停 tooltip 列出玩家 ID
+  const playersOpts = paperOpts({ legend: true });
+  playersOpts.plugins.tooltip.callbacks = {
+    afterBody(items) {
+      const r = rows[items[0].dataIndex];
+      if (!r || !r.online || !r.players || !r.players.length) return '';
+      const MAX = 12;
+      const lines = ['', '在线玩家 (' + r.players.length + ')：'];
+      r.players.slice(0, MAX).forEach(p => lines.push('  · ' + p));
+      if (r.players.length > MAX) lines.push('  … 等 ' + (r.players.length - MAX) + ' 人');
+      return lines;
+    }
+  };
+
   new Chart(document.getElementById('chPlayers'), {
     type: 'line',
     data: { labels, datasets: [
-      { label: '在线玩家', data: rows.map(r => r.online ? r.player_count : null), borderColor: '#26221C', borderWidth: 1.6, backgroundColor: 'rgba(38,34,28,.06)', fill: true, tension: .3, pointRadius: 0, spanGaps: false },
+      { label: '在线玩家', data: rows.map(r => r.online ? r.player_count : null), borderColor: '#26221C', borderWidth: 1.6, backgroundColor: 'rgba(38,34,28,.06)', fill: true, tension: .3, spanGaps: false,
+        pointRadius: ctx => (rows[ctx.dataIndex]?.players?.length ? 2.2 : 0),
+        pointHoverRadius: 4.5,
+        pointBackgroundColor: '#A4443C', pointBorderColor: '#A4443C' },
       { label: '容量', data: rows.map(r => r.online ? r.max_players : null), borderColor: '#C2B89F', borderWidth: 1.2, borderDash: [4, 3], fill: false, tension: .3, pointRadius: 0, spanGaps: false }
     ]},
-    options: paperOpts({ legend: true })
+    options: playersOpts
   });
 
   new Chart(document.getElementById('chLatency'), {

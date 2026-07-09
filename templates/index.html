@@ -1,83 +1,98 @@
 {% extends "base.html" %}
 {% block title %}总览 · MC 服务器状态面板{% endblock %}
 {% block content %}
-<div class="mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight">总览</h1>
-  <p class="text-sm text-stone-500 mt-1">所有服务器的实时状态一览</p>
+<div class="flex items-end gap-3 mb-6 fade-in">
+  <span class="w-1 h-7 bg-seal rounded-sm"></span>
+  <div>
+    <h1 class="font-serif text-2xl font-semibold tracking-tight leading-none">总览</h1>
+    <p class="text-sm text-ink-faint mt-1.5">所有服务器的实时状态一览</p>
+  </div>
+  {% if cards %}
+  <span class="ml-auto text-xs text-ink-faint num bg-paper-50 border hairline rounded-full px-3 py-1.5 shadow-paper">
+    {{ cards | length }} 台在册
+  </span>
+  {% endif %}
 </div>
 
 <form method="post" action="/servers/add"
-      class="mb-8 bg-white border border-stone-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-end gap-3">
+      class="mb-8 bg-paper-50 border hairline rounded-2xl p-5 shadow-paper flex flex-wrap items-end gap-3 fade-in">
   <div class="flex-1 min-w-40">
-    <label class="block text-xs font-medium text-stone-500 mb-1.5">名称</label>
-    <input name="name" required placeholder="我的服务器"
-           class="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
+    <label class="block text-xs font-medium text-ink-faint mb-1.5">名称</label>
+    <input name="name" required placeholder="我的服务器…" autocomplete="off"
+           class="field w-full rounded-xl border hairline bg-paper-100 px-3.5 py-2.5 text-sm">
   </div>
   <div class="flex-[2] min-w-56">
-    <label class="block text-xs font-medium text-stone-500 mb-1.5">地址（host 或 host:port）</label>
-    <input name="address" required placeholder="play.example.com:25565"
-           class="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 transition">
+    <label class="block text-xs font-medium text-ink-faint mb-1.5">地址（host 或 host:port）</label>
+    <input name="address" required placeholder="play.example.com:25565…" autocomplete="off"
+           class="field w-full rounded-xl border hairline bg-paper-100 px-3.5 py-2.5 text-sm font-mono">
   </div>
-  <button class="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-stone-700 active:scale-[0.98] shadow-sm transition">
+  <button class="press inline-flex items-center gap-1.5 rounded-xl bg-ink text-paper-50 px-5 py-2.5 text-sm font-medium shadow-paper hover:bg-black">
     <i data-lucide="plus" class="w-4 h-4"></i> 添加服务器
   </button>
 </form>
 
 {% if not cards %}
-<div class="text-center py-20 text-stone-400 bg-white border border-dashed border-stone-300 rounded-2xl">
-  <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-3"></i>
-  <p>还没有服务器，先在上方添加一个吧。</p>
+<div class="text-center py-20 text-ink-faint bg-paper-50 border-2 border-dashed hairline rounded-2xl fade-in">
+  <span class="grid place-items-center w-14 h-14 mx-auto mb-4 rounded-2xl bg-paper-150 text-ink-faint">
+    <i data-lucide="inbox" class="w-7 h-7"></i>
+  </span>
+  <p class="font-serif text-base text-ink-soft">还没有服务器</p>
+  <p class="text-sm mt-1">在上方填写名称和地址，添加第一台吧。</p>
 </div>
 {% endif %}
 
 <div class="grid gap-5 sm:grid-cols-2">
   {% for c in cards %}
   <a href="/server/{{ c.server.id }}"
-     class="group block bg-white border border-stone-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-stone-300 transition">
+     class="lift group block bg-paper-50 border hairline rounded-2xl p-5 shadow-paper hover:shadow-paper-lg hover:border-ink/20 fade-in">
     <div class="flex items-center gap-3 mb-3">
-      <span class="grid place-items-center w-10 h-10 rounded-xl {{ 'bg-emerald-50 text-emerald-600' if c.snap and c.snap.online else 'bg-stone-100 text-stone-400' }}">
+      <span class="grid place-items-center w-10 h-10 rounded-xl {{ 'bg-moss-wash text-moss' if c.snap and c.snap.online else 'bg-paper-150 text-ink-faint' }}">
         <i data-lucide="{{ 'server' if c.snap and c.snap.online else 'server-off' }}" class="w-5 h-5"></i>
       </span>
       <div class="min-w-0">
-        <p class="font-semibold truncate group-hover:text-stone-900">{{ c.server.name }}</p>
-        <p class="text-xs text-stone-400 font-mono truncate">{{ c.server.address }}</p>
+        <p class="font-serif font-semibold truncate group-hover:text-seal transition-colors">{{ c.server.name }}</p>
+        <p class="text-xs text-ink-faint font-mono truncate">{{ c.server.address }}</p>
       </div>
-      {% if c.snap and c.snap.online %}
-      <span class="ml-auto shrink-0 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>在线
+      <span class="ml-auto shrink-0">
+        {% if c.snap and c.snap.online %}
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-moss-wash text-moss border border-moss-line"><span class="w-1.5 h-1.5 rounded-full bg-moss animate-pulse"></span>在线</span>
+        {% else %}
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rust-wash text-rust border border-rust-line"><span class="w-1.5 h-1.5 rounded-full bg-rust"></span>{{ '离线' if c.snap else '待查询' }}</span>
+        {% endif %}
       </span>
-      {% else %}
-      <span class="ml-auto shrink-0 inline-flex items-center gap-1 text-xs font-medium text-stone-500 bg-stone-100 border border-stone-200 rounded-full px-2.5 py-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-stone-400"></span>{{ '离线' if c.snap else '待查询' }}
-      </span>
-      {% endif %}
     </div>
     {% if c.snap and c.snap.online %}
-    <div class="flex items-center gap-4 text-sm text-stone-600 mb-3">
-      <span class="inline-flex items-center gap-1.5"><i data-lucide="users" class="w-4 h-4 text-stone-400"></i>
-        <b class="font-semibold">{{ c.snap.player_count }}</b><span class="text-stone-400">/{{ c.snap.max_players }}</span></span>
-      <span class="inline-flex items-center gap-1.5"><i data-lucide="activity" class="w-4 h-4 text-stone-400"></i>
+    <div class="flex items-center gap-4 text-sm text-ink-soft mb-3">
+      <span class="inline-flex items-center gap-1.5"><i data-lucide="users" class="w-4 h-4 text-ink-faint"></i>
+        <b class="font-semibold num">{{ c.snap.player_count }}</b><span class="text-ink-faint num">/{{ c.snap.max_players }}</span></span>
+      <span class="inline-flex items-center gap-1.5 num"><i data-lucide="activity" class="w-4 h-4 text-ink-faint"></i>
         {{ c.snap.latency }} ms</span>
-      <span class="inline-flex items-center gap-1.5 truncate"><i data-lucide="tag" class="w-4 h-4 text-stone-400 shrink-0"></i>
+      <span class="inline-flex items-center gap-1.5 truncate"><i data-lucide="tag" class="w-4 h-4 text-ink-faint shrink-0"></i>
         <span class="truncate">{{ c.snap.version }}</span></span>
     </div>
     {% if c.players %}
     <div class="flex items-center -space-x-1.5">
       {% for p in c.players[:8] %}
       <img src="https://mc-heads.net/avatar/{{ p }}/24" alt="{{ p }}" title="{{ p }}"
-           class="avatar w-6 h-6 rounded-md ring-2 ring-white shadow-sm" loading="lazy">
+           class="avatar w-6 h-6 rounded-md ring-2 ring-paper-50 shadow-sm" width="24" height="24" loading="lazy">
       {% endfor %}
       {% if c.players | length > 8 %}
-      <span class="pl-3 text-xs text-stone-400">+{{ c.players | length - 8 }}</span>
+      <span class="pl-3 text-xs text-ink-faint num">+{{ c.players | length - 8 }}</span>
       {% endif %}
     </div>
+    {% else %}
+    <p class="text-xs text-ink-faint">服务器未公开玩家样本</p>
     {% endif %}
     {% elif c.snap %}
-    <p class="text-sm text-stone-400">最后检查 {{ c.snap.ts }}</p>
+    <p class="text-sm text-ink-faint num">最后检查 {{ c.snap.ts }} <span data-reltime="{{ c.snap.ts }}"></span></p>
     {% else %}
-    <p class="text-sm text-stone-400">等待首次查询…</p>
+    <p class="text-sm text-ink-faint">等待首次查询…</p>
     {% endif %}
   </a>
   {% endfor %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>autoRefresh(60);</script>
 {% endblock %}

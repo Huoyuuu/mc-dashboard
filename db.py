@@ -16,6 +16,8 @@ def get_conn():
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 5000")
         yield conn
         conn.commit()
     finally:
@@ -181,6 +183,21 @@ def latest_snapshot(server_id: int):
         return snap, players
 
 
+def latest_snapshots():
+    """所有服务器的最新快照（含玩家样本），一次查询避免逐台往返。
+
+    返回 {server_id: (snap_dict, players_list)}。
+    """
+    with get_conn() as conn:
+        snaps = conn.execute(
+            """SELECT s.* FROM snapshots s
+               JOIN (SELECT server_id, MAX(id) AS max_id
+                     FROM snapshots GROUP BY server_id) m
+                 ON m.max_id = s.id"""
+        ).fetchall()
+        return {s["server_id"]: (dict(s), s["players"]) for s in _attach_players(conn, snaps)} if snaps else {}
+
+
 def _attach_players(conn, snaps):
     if not snaps:
         return []
@@ -237,16 +254,36 @@ def chart_history(server_id: int, limit: int = 100):
 
 
 def range_history(server_id: int, hours: int = 24):
+    """时间范围内的快照（升序），附带该次巡查记录到的玩家名单。"""
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT id, ts, online, player_count, max_players, latency
-               FROM snapshots
-               WHERE server_id = ?
-                 AND ts >= datetime('now', 'localtime', ?)
-               ORDER BY ts ASC""",
+            """SELECT s.id, s.ts, s.online, s.player_count, s.max_players, s.latency,
+                      (SELECT group_concat(sp.player_name, char(31))
+                       FROM snapshot_players sp
+                       WHERE sp.snapshot_id = s.id) AS player_names
+               FROM snapshots s
+               WHERE s.server_id = ?
+                 AND s.ts >= datetime('now', 'localtime', ?)
+               ORDER BY s.ts ASC""",
             (server_id, f"-{hours} hours"),
         ).fetchall()
-        return [dict(r) for r in rows]
+        out = []
+        for r in rows:
+            d = dict(r)
+            names = d.pop("player_names")
+            d["players"] = sorted(names.split("\x1f"), key=str.casefold) if names else []
+            out.append(d)
+        return out
+
+
+def prune_snapshots(days: int = 90):
+    """删除超过保留期的快照（连带玩家样本），防止数据库无限增长。"""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM snapshots WHERE ts < datetime('now', 'localtime', ?)",
+            (f"-{days} days",),
+        )
+        return cur.rowcount
 
 
 def player_summary(server_id: int, hours: int = 24):

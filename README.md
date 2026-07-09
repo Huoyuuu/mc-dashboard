@@ -7,4 +7,4 @@ It tracks server availability, player counts, latency, version, MOTD, player sam
 pip install -r requirements.txt
 python app.py
 ```
-Open http://127.0.0.1:18000 and add Minecraft Java server addresses from the web UI.
+Open http://127.0.0.1:18006 and add Minecraft Java server addresses from the web UI.
