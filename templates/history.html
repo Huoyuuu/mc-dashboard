@@ -59,7 +59,7 @@
 <section class="mb-8 fade-in">
   <div class="flex items-center gap-3 mb-4">
     <span class="w-1 h-5 bg-seal rounded-sm"></span>
-    <h2 class="font-serif text-xl">在线人数</h2>
+    <h2 class="font-serif text-xl whitespace-nowrap">在线人数</h2>
     <span class="flex-1 border-t border-dashed hairline"></span>
   </div>
   <div class="bg-paper-50 border hairline rounded-lg shadow-paper p-4">
@@ -72,7 +72,7 @@
 <section class="mb-8 fade-in">
   <div class="flex items-center gap-3 mb-4">
     <span class="w-1 h-5 bg-seal rounded-sm"></span>
-    <h2 class="font-serif text-xl">延迟</h2>
+    <h2 class="font-serif text-xl whitespace-nowrap">延迟</h2>
     <span class="flex-1 border-t border-dashed hairline"></span>
   </div>
   <div class="bg-paper-50 border hairline rounded-lg shadow-paper p-4">
@@ -83,7 +83,7 @@
 <section class="mb-8 fade-in">
   <div class="flex items-center gap-3 mb-4">
     <span class="w-1 h-5 bg-seal rounded-sm"></span>
-    <h2 class="font-serif text-xl">活跃时段</h2>
+    <h2 class="font-serif text-xl whitespace-nowrap">活跃时段</h2>
     <span class="text-xs text-ink-faint">· 最近 28 天，每格是该星期几、该小时的平均在线人数</span>
     <span class="flex-1 border-t border-dashed hairline"></span>
   </div>
@@ -95,7 +95,7 @@
 <section class="mb-8 fade-in">
   <div class="flex items-center gap-3 mb-4">
     <span class="w-1 h-5 bg-seal rounded-sm"></span>
-    <h2 class="font-serif text-xl">玩家出现名册</h2>
+    <h2 class="font-serif text-xl whitespace-nowrap">玩家出现名册</h2>
     <span class="text-xs text-ink-faint num">· 共 {{ player_summary | length }} 人</span>
     <span class="flex-1 border-t border-dashed hairline"></span>
   </div>
@@ -125,7 +125,7 @@
 <section class="fade-in">
   <div class="flex flex-wrap items-center gap-3 mb-4">
     <span class="w-1 h-5 bg-seal rounded-sm"></span>
-    <h2 class="font-serif text-xl">巡查记录</h2>
+    <h2 class="font-serif text-xl whitespace-nowrap">巡查记录</h2>
     <span class="text-xs text-ink-faint num">· {{ '所选时段，状态相同的连续记录合为一段' if view == 'merged' else '全部记录' }} · 第 {{ page }} / {{ total_pages }} 页 · {{ start_index }}-{{ end_index }} / {{ total }}</span>
     <span class="flex-1 border-t border-dashed hairline"></span>
     <div class="inline-flex rounded-md border hairline bg-paper-50 overflow-hidden text-sm">
@@ -165,16 +165,16 @@
           {% else %}
           <td class="px-4 py-2.5 num whitespace-nowrap text-ink-soft" data-ts="{{ r.ts }}"></td>
           {% endif %}
-          <td class="px-4 py-2.5">{{ status_chip(r.online) }}</td>
-          <td class="px-4 py-2.5 num">{{ (r.player_count ~ ' / ' ~ r.max_players) if r.online else '—' }}</td>
-          <td class="px-4 py-2.5 num {{ r.latency | lat_cls if r.online else '' }}">{{ (r.latency ~ ' ms') if r.online and r.latency is not none else '—' }}</td>
+          <td class="px-4 py-2.5 whitespace-nowrap">{{ status_chip(r.online) }}</td>
+          <td class="px-4 py-2.5 num whitespace-nowrap">{{ (r.player_count ~ ' / ' ~ r.max_players) if r.online else '—' }}</td>
+          <td class="px-4 py-2.5 num whitespace-nowrap {{ r.latency | lat_cls if r.online else '' }}">{{ (r.latency ~ ' ms') if r.online and r.latency is not none else '—' }}</td>
           <td class="px-4 py-2.5">
             {% if not r.online %}
             <span class="text-ink-faint">—</span>
             {% elif r.players %}
             {{ player_chips(r.players, 12 if view == 'merged' else 6) }}
             {% else %}
-            <span class="text-ink-faint">无记录</span>
+            <span class="text-ink-faint">{{ '无人在线' if r.player_count == 0 else '未公开' }}</span>
             {% endif %}
           </td>
         </tr>

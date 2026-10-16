@@ -115,6 +115,8 @@
     </a>
     {% endfor %}
   </div>
+  {% elif snap.online and snap.player_count == 0 %}
+  <p class="text-sm text-ink-faint">当前没有玩家在线。</p>
   {% else %}
   <p class="text-sm text-ink-faint">当前没有可显示的玩家（服务器可能隐藏了玩家列表）。</p>
   {% endif %}

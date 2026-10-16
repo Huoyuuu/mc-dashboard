@@ -44,14 +44,14 @@
         <span class="grid place-items-center w-9 h-9 rounded-xl bg-ink text-paper-50 shadow-paper press">
           <i data-lucide="box" class="w-5 h-5"></i>
         </span>
-        <span class="font-serif text-lg font-semibold tracking-tight leading-none">MC 服务器状态面板</span>
+        <span class="font-serif text-lg font-semibold tracking-tight leading-none whitespace-nowrap">MC 服务器状态面板</span>
       </a>
-      <span class="ml-auto inline-flex items-center gap-1.5 text-xs text-ink-soft bg-paper-50 border hairline rounded-full px-3 py-1.5 shadow-paper">
+      <span class="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-ink-soft bg-paper-50 border hairline rounded-full px-3 py-1.5 shadow-paper">
         <span class="relative flex w-2 h-2">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-moss opacity-50"></span>
           <span class="relative inline-flex rounded-full w-2 h-2 bg-moss"></span>
         </span>
-        每 {{ poll_interval }} 秒自动巡查
+        每 {{ poll_interval }} 秒<span class="hidden sm:inline">自动巡查</span>
       </span>
     </div>
   </header>
