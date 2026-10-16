@@ -5,5 +5,5 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 VOLUME /app/data
-EXPOSE 18006
+EXPOSE 18000
 CMD ["uv", "run", "--no-sync", "python", "app.py"]

@@ -411,4 +411,4 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, host=os.environ.get("MC_DASH_HOST", "0.0.0.0"), port=int(os.environ.get("MC_DASH_PORT", "18006")))
+    uvicorn.run(app, host=os.environ.get("MC_DASH_HOST", "0.0.0.0"), port=int(os.environ.get("MC_DASH_PORT", "18000")))
