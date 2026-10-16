@@ -4,7 +4,11 @@
 
 ![总览](docs/images/overview.png)
 
-| 历史与合并记录 | 活跃时段 |
+| 历史页 | 玩家页 |
+|---|---|
+| ![历史页](docs/images/history.png) | ![玩家页](docs/images/player.png) |
+
+| 合并记录 | 活跃时段 |
 |---|---|
 | ![合并视图](docs/images/history-merged.png) | ![热力图](docs/images/heatmap.png) |
 
