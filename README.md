@@ -39,6 +39,7 @@ git pull && docker compose pull && docker compose up -d
 | `MC_DASH_PORT` | `18000` | 端口 |
 | `MC_DASH_TZ` | `Asia/Shanghai` | 显示时区 |
 | `MC_DASH_DATA_DIR` | `./data` | 数据目录 |
+| `MC_DASH_RETENTION_DAYS` | `180` | 历史保留天数，`-1` 为永久保留 |
 
 ## 许可证
 

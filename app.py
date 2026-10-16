@@ -22,7 +22,7 @@ POLL_INTERVAL = 30  # 秒
 POLL_TIMEOUT = 15  # 单台服务器整次查询（含 DNS/SRV 解析）的硬超时，秒
 HISTORY_PAGE_SIZE = 60
 CHART_MAX_POINTS = 600  # 图表最多点数，超出则按时间桶聚合
-RETENTION_DAYS = 90  # 快照保留天数
+RETENTION_DAYS = int(os.environ.get("MC_DASH_RETENTION_DAYS", "180"))  # 快照保留天数，负数表示永久保留
 PRUNE_EVERY = 3600  # 清理过期快照的间隔，秒；启动后立即先清一次
 GAP = 3 * POLL_INTERVAL  # 相邻快照间隔超过它，说明面板自己停过机
 
@@ -91,7 +91,7 @@ async def poll_loop():
             servers = await asyncio.to_thread(db.list_servers)
             await asyncio.gather(*(poll_server(s) for s in servers))
             last_poll = time.time()
-            if last_poll - last_prune >= PRUNE_EVERY:
+            if RETENTION_DAYS >= 0 and last_poll - last_prune >= PRUNE_EVERY:
                 await asyncio.to_thread(db.prune_snapshots, RETENTION_DAYS)
                 last_prune = last_poll
         except Exception:

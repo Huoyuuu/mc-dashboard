@@ -8,6 +8,7 @@ services:
       - ./data:/app/data
     environment:
       MC_DASH_TZ: Asia/Shanghai  # 页面显示时区，也用来解读旧版本存下的无时区时间
+      MC_DASH_RETENTION_DAYS: ${MC_DASH_RETENTION_DAYS:-180}  # 快照保留天数，-1 表示永久保留
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18000/healthz')"]
