@@ -1,0 +1,8 @@
+.git
+.venv
+data
+mcstatus.db*
+__pycache__
+tests
+docs
+.pytest_cache
