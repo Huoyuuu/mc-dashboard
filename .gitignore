@@ -4,3 +4,6 @@ __pycache__/
 .venv/
 venv/
 .env
+data/
+mcstatus.db*
+.pytest_cache/
