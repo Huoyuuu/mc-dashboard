@@ -3,7 +3,7 @@ services:
     image: ghcr.io/huoyuuu/mc-dashboard:latest
     build: .
     ports:
-      - "18000:18000"
+      - "${MC_DASH_BIND:-18000}:18000"  # 只给本机反向代理用时可在 .env 里写 MC_DASH_BIND=127.0.0.1:18000
     volumes:
       - ./data:/app/data
     environment:
