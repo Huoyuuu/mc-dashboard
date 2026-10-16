@@ -1,13 +1,36 @@
 """SQLite 数据层：服务器列表 + 状态快照 + 在线玩家样本"""
 import contextlib
 import json
+import logging
+import os
+import shutil
 import sqlite3
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent / "data"
+APP_DIR = Path(__file__).parent
+DATA_DIR = Path(os.environ.get("MC_DASH_DATA_DIR", APP_DIR / "data"))
 DB_PATH = DATA_DIR / "mcstatus.db"
+OLD_DB_PATH = APP_DIR / "mcstatus.db"  # d56b438 ~ 8288955 的版本把库放在仓库根目录
 LEGACY_SERVERS = DATA_DIR / "servers.json"
 LEGACY_HISTORY = DATA_DIR / "history.json"
+
+# 时间统一存 UTC，形如 2026-10-16T08:00:00Z；字符串比较即时间比较，所有条件都必须用同一格式
+TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
+SQL_SINCE = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)"
+TZ = os.environ.get("MC_DASH_TZ", "Asia/Shanghai")  # 页面显示时区，也是旧数据（无时区）的解读时区
+GAP_CAP = 90  # 估算在线时长时，相邻快照间隔的上限（秒）；超过说明面板停过机
+# 一次被记录到代表的在线秒数：与同服上一条快照的间隔（走 server_id, ts 索引），封顶 GAP_CAP，之前没有快照按 30 秒
+SQL_SECS = f"""MIN(CAST(strftime('%s', s.ts) AS INTEGER) - COALESCE(
+    (SELECT CAST(strftime('%s', MAX(p.ts)) AS INTEGER) FROM snapshots p WHERE p.server_id = s.server_id AND p.ts < s.ts),
+    CAST(strftime('%s', s.ts) AS INTEGER) - 30), {GAP_CAP})"""
+
+log = logging.getLogger("mc_dashboard")
+
+
+def utcnow() -> str:
+    return datetime.now(timezone.utc).strftime(TS_FMT)
 
 
 @contextlib.contextmanager
@@ -25,7 +48,13 @@ def get_conn():
 
 
 def init_db():
-    DATA_DIR.mkdir(exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not DB_PATH.exists() and OLD_DB_PATH.exists():
+        for suffix in ("", "-wal", "-shm"):
+            src = OLD_DB_PATH.with_name(OLD_DB_PATH.name + suffix)
+            if src.exists():
+                shutil.move(src, DB_PATH.with_name(DB_PATH.name + suffix))
+        log.warning("已把旧版本的 %s 移到 %s", OLD_DB_PATH, DB_PATH)
     with get_conn() as conn:
         conn.executescript(
             """
@@ -33,12 +62,12 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 address TEXT NOT NULL UNIQUE,
-                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
             CREATE TABLE IF NOT EXISTS snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-                ts TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 online INTEGER NOT NULL,
                 player_count INTEGER,
                 max_players INTEGER,
@@ -55,9 +84,38 @@ def init_db():
                 player_name TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_sp_snapshot ON snapshot_players(snapshot_id);
+            CREATE INDEX IF NOT EXISTS idx_sp_name ON snapshot_players(player_name);
+            CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON snapshots(ts);
             """
         )
-    migrate_legacy_json()
+        with contextlib.suppress(sqlite3.OperationalError):  # 增量加列，可重复执行
+            conn.execute("ALTER TABLE servers ADD COLUMN icon TEXT")
+    migrate_legacy_json()  # 必须在 UTC 转换之前：JSON 导入的是本地时间
+    migrate_to_utc()
+
+
+def migrate_to_utc():
+    """旧版本存的是不带时区的本地时间，按 TZ 解读后换算成 UTC；只执行一次，换算前先整库备份。"""
+    zone = ZoneInfo(TZ)
+
+    def to_utc(value):
+        try:
+            return datetime.fromisoformat(value).replace(tzinfo=zone).astimezone(timezone.utc).strftime(TS_FMT)
+        except (TypeError, ValueError):
+            return value
+
+    with get_conn() as conn:
+        if conn.execute("PRAGMA user_version").fetchone()[0] >= 1:
+            return
+        if conn.execute("SELECT 1 FROM snapshots LIMIT 1").fetchone():
+            backup = DB_PATH.with_name(f"{DB_PATH.name}.bak-{datetime.now():%Y%m%d%H%M%S}")
+            with contextlib.closing(sqlite3.connect(backup)) as dst:
+                conn.backup(dst)
+            log.warning("时间格式迁移到 UTC，原库已备份到 %s", backup)
+        conn.create_function("to_utc", 1, to_utc, deterministic=True)
+        for table, col in (("snapshots", "ts"), ("servers", "created_at")):
+            conn.execute(f"UPDATE {table} SET {col} = to_utc({col}) WHERE {col} NOT LIKE '%Z'")
+        conn.execute("PRAGMA user_version = 1")
 
 
 def _read_json(path: Path, default):
@@ -126,8 +184,11 @@ def get_server(server_id: int):
 
 
 def add_server(name: str, address: str):
+    """地址重复时抛 sqlite3.IntegrityError"""
     with get_conn() as conn:
-        conn.execute("INSERT OR IGNORE INTO servers (name, address) VALUES (?, ?)", (name, address))
+        return conn.execute(
+            "INSERT INTO servers (name, address, created_at) VALUES (?, ?, ?)", (name, address, utcnow())
+        ).lastrowid
 
 
 def update_server(server_id: int, name: str, address: str):
@@ -145,15 +206,18 @@ def delete_server(server_id: int):
 
 
 def save_snapshot(server_id, online, player_count=None, max_players=None,
-                  latency=None, version=None, motd=None, players=()):
+                  latency=None, version=None, motd=None, players=(), icon=None):
     players = sorted(set(players), key=str.casefold)
     with get_conn() as conn:
+        # ts 显式写入：老库的列默认值仍是本地时间
         cur = conn.execute(
             """INSERT INTO snapshots
-               (server_id, online, player_count, max_players, latency, version, motd)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (server_id, int(online), player_count, max_players, latency, version, motd),
+               (server_id, ts, online, player_count, max_players, latency, version, motd)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (server_id, utcnow(), int(online), player_count, max_players, latency, version, motd),
         )
+        if online:
+            conn.execute("UPDATE servers SET icon = COALESCE(?, icon) WHERE id = ?", (icon, server_id))
         sid = cur.lastrowid
         if players:
             conn.executemany(
@@ -236,71 +300,71 @@ def history_page(server_id: int, page: int = 1, page_size: int = 60):
         return _attach_players(conn, snaps)
 
 
-def chart_history(server_id: int, limit: int = 100):
-    """图表快照（按时间升序），取最近 limit 条。"""
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT * FROM (
-                   SELECT id, ts, online, player_count, max_players, latency
-                   FROM snapshots
-                   WHERE server_id = ?
-                   ORDER BY id DESC
-                   LIMIT ?
-               )
-               ORDER BY id ASC""",
-            (server_id, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
 def range_history(server_id: int, hours: int = 24):
-    """时间范围内的快照（升序），附带该次巡查记录到的玩家名单。"""
+    """时间范围内的快照（升序），附带该次巡查记录到的玩家名单；t 为 Unix 秒。"""
+    since = (server_id, f"-{hours} hours")
+    where = f"s.server_id = ? AND s.ts >= {SQL_SINCE}"
     with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT s.id, s.ts, s.online, s.player_count, s.max_players, s.latency,
-                      (SELECT group_concat(sp.player_name, char(31))
-                       FROM snapshot_players sp
-                       WHERE sp.snapshot_id = s.id) AS player_names
-               FROM snapshots s
-               WHERE s.server_id = ?
-                 AND s.ts >= datetime('now', 'localtime', ?)
-               ORDER BY s.ts ASC""",
-            (server_id, f"-{hours} hours"),
-        ).fetchall()
-        out = []
-        for r in rows:
-            d = dict(r)
-            names = d.pop("player_names")
-            d["players"] = sorted(names.split("\x1f"), key=str.casefold) if names else []
-            out.append(d)
-        return out
+        rows = [dict(r, players=[]) for r in conn.execute(
+            f"""SELECT s.id, s.ts, CAST(strftime('%s', s.ts) AS INTEGER) AS t,
+                      s.online, s.player_count, s.max_players, s.latency
+               FROM snapshots s WHERE {where} ORDER BY s.ts ASC""", since)]
+        by_id = {r["id"]: r for r in rows}
+        for sid, name in conn.execute(
+            f"""SELECT sp.snapshot_id, sp.player_name FROM snapshot_players sp
+               JOIN snapshots s ON s.id = sp.snapshot_id WHERE {where}""", since):
+            by_id[sid]["players"].append(name)
+    for r in rows:
+        r["players"].sort(key=str.casefold)
+    return rows
 
 
 def prune_snapshots(days: int = 90):
     """删除超过保留期的快照（连带玩家样本），防止数据库无限增长。"""
     with get_conn() as conn:
         cur = conn.execute(
-            "DELETE FROM snapshots WHERE ts < datetime('now', 'localtime', ?)",
+            f"DELETE FROM snapshots WHERE ts < {SQL_SINCE}",
             (f"-{days} days",),
         )
         return cur.rowcount
 
 
-def player_summary(server_id: int, hours: int = 24):
+def hourly(hours: int, server_id: int | None = None):
+    """按 UTC 小时分桶的统计（首页迷你曲线、24h 在线率、热力图共用）。"""
+    where = f"ts >= {SQL_SINCE}" + (" AND server_id = ?" if server_id else "")
+    params = (f"-{hours} hours",) + ((server_id,) if server_id else ())
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT sp.player_name AS name,
-                      COUNT(*) AS sightings,
-                      MIN(s.ts) AS first_seen,
-                      MAX(s.ts) AS last_seen
-               FROM snapshot_players sp
-               JOIN snapshots s ON s.id = sp.snapshot_id
-               WHERE s.server_id = ?
-                 AND s.online = 1
-                 AND s.ts >= datetime('now', 'localtime', ?)
-               GROUP BY sp.player_name
-               ORDER BY sightings DESC, lower(sp.player_name), sp.player_name""",
-            (server_id, f"-{hours} hours"),
+            f"""SELECT server_id, substr(ts, 1, 13) AS h, COUNT(*) AS n, SUM(online) AS up,
+                      MAX(player_count) AS peak,
+                      AVG(CASE WHEN online THEN COALESCE(player_count, 0) END) AS avg_players,
+                      AVG(CASE WHEN online THEN latency END) AS latency
+               FROM snapshots {"" if server_id else "INDEXED BY idx_snapshots_ts"} WHERE {where}
+               GROUP BY server_id, h ORDER BY server_id, h""",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def player_seen(name: str):
+    with get_conn() as conn:
+        return conn.execute(
+            """SELECT MIN(s.ts) AS first_seen, MAX(s.ts) AS last_seen, COUNT(*) AS sightings
+               FROM snapshot_players sp JOIN snapshots s ON s.id = sp.snapshot_id
+               WHERE sp.player_name = ?""",
+            (name,),
+        ).fetchone()
+
+
+def player_hours(name: str, hours: int = 720):
+    """玩家在各服务器、各 UTC 小时的估算在线秒数。"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT s.server_id, substr(s.ts, 1, 13) AS h, SUM({SQL_SECS}) AS secs, COUNT(*) AS n
+               FROM snapshot_players sp JOIN snapshots s ON s.id = sp.snapshot_id
+               WHERE sp.player_name = ? AND s.ts >= {SQL_SINCE}
+               GROUP BY s.server_id, h ORDER BY h""",
+            (name, f"-{hours} hours"),
         ).fetchall()
         return [dict(r) for r in rows]
 

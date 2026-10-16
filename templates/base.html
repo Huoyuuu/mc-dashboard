@@ -4,11 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}MC 服务器状态面板{% endblock %}</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/vendor/lucide.min.js"></script>
   <style>
     :root { --paper: #faf9f5; }
     html { -webkit-text-size-adjust: 100%; }
@@ -18,34 +15,13 @@
       background-size: 22px 22px;
       font-feature-settings: "cv11", "ss01";
     }
-    .font-serif { font-family: "Noto Serif SC", ui-serif, Georgia, serif; }
-    .font-mono, .num { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .font-serif { font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", ui-serif, Georgia, serif; }
+    .font-mono, .num { font-family: "JetBrains Mono", "Cascadia Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .avatar { image-rendering: pixelated; }
-    .hairline { border-color: #e4decf; }
     .num { font-variant-numeric: tabular-nums; }
     .fade-in { animation: fadeIn .28s cubic-bezier(.2,.7,.2,1) both; }
     .shadow-paper { box-shadow: 0 1px 2px rgba(38,34,28,.04), 0 6px 18px rgba(38,34,28,.05); }
     .shadow-paper-lg { box-shadow: 0 2px 6px rgba(38,34,28,.05), 0 16px 40px rgba(38,34,28,.08); }
-    .bg-paper-50 { background-color: #fcfbf8; }
-    .bg-paper-100 { background-color: #f7f5ef; }
-    .bg-paper-150 { background-color: #f1eee5; }
-    .bg-paper-200 { background-color: #eae5d8; }
-    .text-paper-50 { color: #fcfbf8; }
-    .text-ink { color: #26221c; }
-    .text-ink-soft { color: #5a544a; }
-    .text-ink-faint { color: #92897a; }
-    .bg-ink { background-color: #26221c; }
-    .border-ink { border-color: #26221c; }
-    .bg-seal { background-color: #a4443c; }
-    .text-seal { color: #a4443c; }
-    .bg-moss-wash { background-color: #eef3ec; }
-    .text-moss { color: #437051; }
-    .border-moss-line { border-color: #cbdcc8; }
-    .bg-moss { background-color: #437051; }
-    .bg-rust-wash { background-color: #f8eee8; }
-    .text-rust { color: #a8503a; }
-    .border-rust-line { border-color: #e8cfc0; }
-    .bg-rust { background-color: #a8503a; }
     .press { transition: transform .12s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease; }
     .press:active { transform: translateY(1px) scale(.99); }
     .lift { transition: transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .2s ease, border-color .2s ease; }
@@ -75,7 +51,7 @@
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-moss opacity-50"></span>
           <span class="relative inline-flex rounded-full w-2 h-2 bg-moss"></span>
         </span>
-        每 60 秒自动巡查
+        每 {{ poll_interval }} 秒自动巡查
       </span>
     </div>
   </header>
@@ -86,25 +62,38 @@
     纸白监控台 · Minecraft Java 服务器 · mcstatus
   </footer>
   <script>
-    function esc(s) {
-      return String(s ?? '').replace(/[&<>"']/g, function (c) {
-        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
-      });
+    const TZ = {{ tz | tojson }};
+    // 库里的时间都是 UTC（结尾 Z），统一按 TZ 显示；不带时区的旧格式按 UTC 处理
+    function toDate(value) {
+      if (!value) return null;
+      let s = String(value).replace(' ', 'T');
+      if (!/(Z|[+-]\d\d:?\d\d)$/.test(s)) s += 'Z';
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
     }
-    function fmtDT(value) {
-      if (!value) return '—';
-      const d = new Date(String(value).replace(' ', 'T'));
-      return Number.isNaN(d.getTime()) ? value : d.toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    function fmt(value, opts) {
+      const d = toDate(value);
+      return d ? d.toLocaleString('zh-CN', Object.assign({ timeZone: TZ, hour12: false }, opts)) : (value || '—');
     }
-    function fmtT(value) {
-      if (!value) return '—';
-      const d = new Date(String(value).replace(' ', 'T'));
-      return Number.isNaN(d.getTime()) ? value : d.toLocaleString('zh-CN', { hour:'2-digit', minute:'2-digit' });
+    function fmtDT(value) { return fmt(value, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    function fmtT(value) { return fmt(value, { hour: '2-digit', minute: '2-digit' }); }
+    function fmtFull(value) { const d = toDate(value); return d ? d.toLocaleString('sv-SE', { timeZone: TZ }) : (value || '—'); }
+    // TZ 下的 [星期(0=周日), 小时]，热力图用
+    function wdHour(value) {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(toDate(value));
+      const get = t => parts.find(p => p.type === t).value;
+      return [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(get('weekday')), +get('hour')];
+    }
+    function fmtDur(sec) {
+      const m = Math.round(sec / 60);
+      if (m < 1) return '不到 1 分';
+      if (m < 60) return m + ' 分';
+      const h = Math.floor(m / 60);
+      return h < 48 ? h + ' 小时' + (m % 60 ? ' ' + (m % 60) + ' 分' : '') : (h / 24).toFixed(1) + ' 天';
     }
     function fmtRel(value) {
-      if (!value) return '';
-      const d = new Date(String(value).replace(' ', 'T'));
-      if (Number.isNaN(d.getTime())) return '';
+      const d = toDate(value);
+      if (!d) return '';
       const sec = Math.round((Date.now() - d.getTime()) / 1000);
       if (sec < 0 || sec > 30 * 86400) return '';
       if (sec < 60) return '刚刚';
@@ -112,14 +101,29 @@
       if (sec < 86400) return Math.floor(sec / 3600) + ' 小时前';
       return Math.floor(sec / 86400) + ' 天前';
     }
-    // 把带 data-reltime 的时间戳补上相对时间描述，例如 “（3 分钟前）”
-    function applyRelTimes() {
+    // 服务端只输出 UTC 原始值：data-ts（data-fmt=full|dt|t）、data-dur（秒）、data-reltime
+    function applyTimes() {
+      const fns = { full: fmtFull, dt: fmtDT, t: fmtT };
+      document.querySelectorAll('[data-ts]').forEach(function (el) {
+        el.textContent = (fns[el.dataset.fmt] || fmtFull)(el.dataset.ts);
+      });
+      document.querySelectorAll('[data-dur]').forEach(function (el) { el.textContent = fmtDur(+el.dataset.dur); });
       document.querySelectorAll('[data-reltime]').forEach(function (el) {
         const rel = fmtRel(el.getAttribute('data-reltime'));
         el.textContent = rel ? '（' + rel + '）' : '';
       });
     }
-    // 定时整页刷新：页面隐藏或用户正在输入时跳过，等下一轮再试
+    // 用新拉到的整页 HTML 替换 #live 区域，不整页刷新
+    function swapLive(html) {
+      const next = new DOMParser().parseFromString(html, 'text/html').getElementById('live');
+      const live = document.getElementById('live');
+      if (!next || !live) return location.reload();
+      next.querySelectorAll('.fade-in').forEach(el => el.classList.remove('fade-in'));
+      live.innerHTML = next.innerHTML;
+      refreshIcons();
+      applyTimes();
+    }
+    // 定时局部刷新：页面隐藏或用户正在输入时跳过，等下一轮再试
     function autoRefresh(seconds) {
       let last = Date.now();
       setInterval(function () {
@@ -128,24 +132,44 @@
         const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
         if (document.hidden || typing) return;
         last = Date.now();
-        location.reload();
+        fetch(location.href, { cache: 'no-store' }).then(r => r.text()).then(swapLive).catch(() => {});
       }, 5000);
     }
-    function avatarHTML(name, sizeCls) {
-      const n = esc(name);
-      return '<span class="inline-flex items-center justify-center overflow-hidden bg-paper-200 text-ink-soft rounded ' + sizeCls + '">' +
-        '<img src="https://mc-heads.net/avatar/' + encodeURIComponent(name) + '/64" alt="' + n + '" loading="lazy" class="w-full h-full" style="image-rendering:pixelated" onerror="this.remove()">' +
-        '</span>';
-    }
-    function playerChip(name) {
-      return '<span class="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded border hairline bg-paper-50">' +
-        avatarHTML(name, 'w-[18px] h-[18px]') + '<span class="font-mono text-xs">' + esc(name) + '</span></span>';
-    }
-    function chip(online) {
-      return online
-        ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-moss-wash text-moss border border-moss-line"><span class="w-1.5 h-1.5 rounded-full bg-moss animate-pulse"></span>在线</span>'
-        : '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rust-wash text-rust border border-rust-line"><span class="w-1.5 h-1.5 rounded-full bg-rust"></span>离线</span>';
-    }
+    // data-ajax 表单：后台提交，按钮显示"查询中"，结果回来后局部替换（303 跳转后的页面就是新内容）
+    document.addEventListener('submit', function (e) {
+      const form = e.target;
+      if (!form.hasAttribute('data-ajax')) return;
+      e.preventDefault();
+      const btn = form.querySelector('button');
+      const label = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = '查询中…';
+      fetch(form.action, { method: 'POST', body: new FormData(form) })
+        .then(r => r.text()).then(swapLive)
+        .finally(function () { btn.disabled = false; btn.innerHTML = label; refreshIcons(); });
+    });
+    // 一键复制：http + IP 访问时没有 navigator.clipboard，回退到 execCommand
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-copy]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const text = btn.dataset.copy;
+      const fallback = function () {
+        const ta = Object.assign(document.createElement('textarea'), { value: text });
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      };
+      (navigator.clipboard ? navigator.clipboard.writeText(text).catch(fallback) : Promise.resolve(fallback()))
+        .then(function () {
+          btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i>';
+          refreshIcons();
+          setTimeout(function () { btn.innerHTML = '<i data-lucide="copy" class="w-3.5 h-3.5"></i>'; refreshIcons(); }, 1500);
+        });
+    });
     function paperOpts(o) {
       o = o || {};
       return {
@@ -157,15 +181,35 @@
           tooltip: { backgroundColor: '#26221C', titleColor: '#F7F5EF', bodyColor: '#EAE5D8', cornerRadius: 6, padding: 10, displayColors: false }
         },
         scales: {
-          x: { grid: { display: false }, border: { color: '#DCD5C2' }, ticks: { color: '#92897A', font: { size: 10 }, maxTicksLimit: 8, maxRotation: 0 } },
-          y: { beginAtZero: true, grid: { color: '#F1EEE5' }, border: { display: false }, ticks: { color: '#92897A', font: { size: 10 }, precision: 0 } }
+          x: { grid: { display: false }, border: { color: '#DCD5C2' }, ticks: { color: '#7A7264', font: { size: 10 }, maxTicksLimit: 8, maxRotation: 0 } },
+          y: { beginAtZero: true, grid: { color: '#F1EEE5' }, border: { display: false }, ticks: { color: '#7A7264', font: { size: 10 }, precision: 0 } }
         }
       };
     }
+    // 热力图：cells 为 [[UTC 时间, 数值], ...]，按 TZ 聚合到 7×24 格（默认取平均，total 时累加），值越大颜色越深
+    const HEAT = ['#f1eee5', '#d5e2d1', '#a6c3a3', '#6f9877', '#437051', '#2c4b36'];
+    function renderHeat(el, cells, unit, total) {
+      const sum = Array.from({ length: 7 }, () => Array(24).fill(0)), cnt = Array.from({ length: 7 }, () => Array(24).fill(0));
+      cells.forEach(function (c) { const [d, h] = wdHour(c[0]); sum[d][h] += c[1]; cnt[d][h] += 1; });
+      const avg = total ? sum : sum.map((r, d) => r.map((v, h) => cnt[d][h] ? v / cnt[d][h] : 0));
+      const max = Math.max(0, ...avg.flat());
+      const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      let html = '<div class="grid gap-[3px]" style="grid-template-columns:2.5rem repeat(24,minmax(0,1fr))">';
+      [1, 2, 3, 4, 5, 6, 0].forEach(function (d) {
+        html += '<span class="text-[10px] text-ink-faint leading-none self-center">' + names[d] + '</span>';
+        for (let h = 0; h < 24; h++) {
+          const v = avg[d][h], lv = v > 0 && max > 0 ? Math.min(5, 1 + Math.floor(v / max * 4.999)) : 0;
+          html += '<span class="aspect-square rounded-[3px]" style="background:' + HEAT[lv] + '" title="' + names[d] + ' ' + h + ' 点 · ' + unit(v) + '"></span>';
+        }
+      });
+      html += '<span></span>';
+      for (let h = 0; h < 24; h++) html += '<span class="text-[9px] text-ink-faint text-center num">' + (h % 3 ? '' : h) + '</span>';
+      el.innerHTML = html + '</div>';
+    }
     function refreshIcons() { if (window.lucide) lucide.createIcons(); }
     refreshIcons();
-    applyRelTimes();
-    setInterval(applyRelTimes, 30000);
+    applyTimes();
+    setInterval(applyTimes, 30000);
   </script>
   {% block scripts %}{% endblock %}
 </body>

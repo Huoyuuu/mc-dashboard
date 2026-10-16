@@ -8,6 +8,7 @@ dependencies = [
     "jinja2>=3.1.6",
     "mcstatus>=14.2.0",
     "python-multipart>=0.0.32",
+    "tzdata>=2026.5",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -16,3 +17,6 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "tests"]

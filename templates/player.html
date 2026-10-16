@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} · 玩家{% endblock %}
+{% block content %}
+<a href="javascript:history.back()" class="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink transition-colors mb-5">
+  <i data-lucide="arrow-left" class="w-4 h-4"></i>返回
+</a>
+
+<div class="flex flex-wrap items-center gap-4 mb-7 fade-in">
+  <img src="https://mc-heads.net/avatar/{{ name | urlencode }}/64" alt="" onerror="this.remove()"
+       class="avatar w-16 h-16 rounded-xl shadow-paper" width="64" height="64">
+  <div class="min-w-0">
+    <h1 class="font-mono text-2xl font-semibold tracking-tight truncate">{{ name }}</h1>
+    <p class="text-sm text-ink-faint num mt-1">
+      最早出现 <span data-ts="{{ seen.first_seen }}" data-fmt="dt"></span> · 最近出现 <span data-ts="{{ seen.last_seen }}" data-fmt="dt"></span> <span data-reltime="{{ seen.last_seen }}"></span>
+    </p>
+  </div>
+  <span class="ml-auto text-xs text-ink-faint num bg-paper-50 border hairline rounded-full px-3 py-1.5 shadow-paper">累计被记录 {{ seen.sightings }} 次</span>
+</div>
+
+<section class="mb-8 fade-in">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="w-1 h-5 bg-seal rounded-sm"></span>
+    <h2 class="font-serif text-xl">常去的服务器</h2>
+    <span class="text-xs text-ink-faint">· 最近 30 天</span>
+    <span class="flex-1 border-t border-dashed hairline"></span>
+  </div>
+  {% if servers %}
+  {% set top = servers[0].secs or 1 %}
+  <div class="grid gap-3 sm:grid-cols-2">
+    {% for s in servers %}
+    <a href="/server/{{ s.id }}/history?hours=720" class="bg-paper-50 border hairline rounded-md shadow-paper p-3 hover:border-ink/20 transition-colors">
+      <div class="flex items-baseline gap-2">
+        <span class="font-serif font-semibold truncate">{{ s.name }}</span>
+        <span class="ml-auto text-xs text-ink-faint num">约 <span data-dur="{{ s.secs }}"></span> · {{ s.n }} 次</span>
+      </div>
+      <div class="h-1 rounded bg-paper-200 mt-2 overflow-hidden"><div class="h-full bg-moss" style="width:{{ (s.secs / top * 100) | round | int }}%"></div></div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="border-2 border-dashed hairline rounded-lg p-8 text-center text-ink-faint text-sm">最近 30 天没有记录。</div>
+  {% endif %}
+</section>
+
+<section class="fade-in">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="w-1 h-5 bg-seal rounded-sm"></span>
+    <h2 class="font-serif text-xl">什么时候在线</h2>
+    <span class="text-xs text-ink-faint">· 最近 30 天，每格是该星期几、该小时累计在线时长</span>
+    <span class="flex-1 border-t border-dashed hairline"></span>
+  </div>
+  <div class="bg-paper-50 border hairline rounded-lg shadow-paper p-4" id="heat">
+    <p class="text-sm text-ink-faint text-center py-6">最近 30 天没有记录。</p>
+  </div>
+  <p class="text-xs text-ink-faint mt-3">在线时长按相邻两次巡查的间隔累加估算，只统计服务器公开的玩家样本。</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const heat = {{ heat | tojson }};
+  if (heat.length) renderHeat(document.getElementById('heat'), heat.map(c => [c[0] + ':00:00Z', c[1]]), v => '约 ' + fmtDur(v), true);
+</script>
+{% endblock %}
